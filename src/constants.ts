@@ -30,6 +30,15 @@ export const FR1_END = "2005-11";
 export const FR2_RATE = 0.0035;
 export const FR2_START = "2005-12";
 
+// Costs paid up to this date are updated by the Anexo Unico index (IN SRF 84/2001, art. 7);
+// later costs are not corrected (art. 8).
+export const COST_INDEX_END = "1995-12-31";
+
+// Land with construction started up to these dates: the land date governs the whole gain,
+// for art. 18 (IN SRF 84/2001, art. 26, par. 1) and for FR1/FR2 (IN RFB 599/2005, art. 3, par. 6).
+export const LAND_RULE_ART18_LIMIT = "1988-12-31";
+export const LAND_RULE_FACTOR_LIMIT = "1995-12-31";
+
 // Earliest sale date handled: earlier sales follow other factors
 // (IN RFB 599/2005, art. 3, par. 1, I and II).
 export const MIN_SALE_DATE = "2005-12-01";

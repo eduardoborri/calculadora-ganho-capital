@@ -1,0 +1,149 @@
+import type {Moeda} from "./data/custoAte1995";
+
+export type AcquisitionForm = "compra" | "heranca" | "legado" | "doacao_adiantamento" | "dissolucao";
+export type Ownership = "exclusivo" | "condominio" | "comunhao";
+export type SaleMode = "vista" | "prazo" | "partes";
+export type OutOfScope =
+  | "nao_residente"
+  | "pessoa_juridica"
+  | "rural_terra_nua"
+  | "exterior"
+  | "moeda_estrangeira"
+  | "permuta_torna";
+
+export interface CostItem {
+  id: string;
+  description: string;
+  date: string; // for a construction item, the date the construction started
+  value: number;
+  hasDocument: boolean;
+  isLand?: boolean;
+  original?: {amount: number; moeda: Moeda}; // item up to 31/12/1995
+  manual?: boolean; // value typed over the default
+}
+
+export interface Installment {
+  id: string;
+  date: string;
+  value: number;
+  brokerage: number;
+}
+
+export interface PriorPart {
+  id: string;
+  date: string;
+  gain: number;
+  taxPaid: number;
+}
+
+export interface Application {
+  id: string;
+  date: string;
+  value: number;
+  kind: "aquisicao" | "quitacao";
+}
+
+export interface ValueUpdate {
+  law: "14973" | "rearp";
+  date: string;
+  caa: number;
+  dta: number;
+  originalAcquisitionDate: string;
+  migratedFrom14973: boolean;
+  taxPaidSelic: number; // Rearp: tax paid corrected by Selic, typed by the user
+  exceptionCausaMortisOuPartilha: boolean;
+}
+
+export interface CaseInput {
+  taxpayerName: string;
+  calendarYear: number;
+  propertyDescription: string;
+  residential: boolean;
+  acquisitionDate: string;
+  acquisitionForm: AcquisitionForm;
+  transferAtMarket: boolean;
+  ownership: Ownership;
+  quotaPct: number;
+  landRule: boolean;
+  costItems: CostItem[];
+  contractDate: string;
+  saleValue: number;
+  brokerage: number;
+  saleMode: SaleMode;
+  belowMarket: boolean;
+  installments: Installment[];
+  priorParts: PriorPart[];
+  smallValue: {sameNatureMonthTotal: number; confirmed: boolean};
+  singleProperty: {onlyProperty: boolean; noSaleIn5Years: boolean};
+  reinvestment: {
+    enabled: boolean;
+    firstContractDate: string;
+    applications: Application[];
+    usedInLast5Years: boolean;
+    moreThanOneSale: boolean;
+    landOrGarage: boolean;
+  };
+  update: ValueUpdate | null;
+  outOfScope: OutOfScope[];
+}
+
+export interface ItemReduction {
+  itemId: string;
+  share: number;
+  gain: number;
+  art18Pct: number;
+  m1: number;
+  m2: number;
+  fr1: number;
+  fr2: number;
+  reducedGain: number;
+}
+
+export interface BracketLine {
+  from: number;
+  to: number;
+  rate: number;
+  base: number;
+  tax: number;
+}
+
+export interface ScheduleLine {
+  month: string;
+  received: number;
+  gain: number;
+  tax: number;
+  dueDate: string;
+}
+
+export interface Alert {
+  id: string;
+  level: "info" | "aviso" | "risco" | "aberto";
+  text: string;
+  legal?: string;
+}
+
+export type CaseStatus = "ok" | "incompleto" | "invalido" | "fora_de_escopo";
+
+export interface ExemptionCheck {
+  applies: boolean;
+  reasons: string[];
+}
+
+export interface CaseResult {
+  status: CaseStatus;
+  missing: string[];
+  saleNet: number;
+  totalCost: number;
+  grossGain: number;
+  items: ItemReduction[];
+  gainAfterReductions: number;
+  exemption: {small: ExemptionCheck; single: ExemptionCheck};
+  reinvestment: {deadline: string | null; applied: number; proceeds: number; taxedShare: number};
+  taxableBase: number;
+  brackets: BracketLine[];
+  taxDue: number;
+  priorTaxPaid: number;
+  taxPayable: number;
+  schedule: ScheduleLine[];
+  alerts: Alert[];
+}
