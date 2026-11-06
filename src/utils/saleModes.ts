@@ -2,7 +2,7 @@
 // Pure functions, full precision.
 
 import {TAX_BRACKETS} from "../constants";
-import type {Alert, CaseInput, Installment, ScheduleLine} from "../types";
+import type {Alert, CaseInput, Installment, PriorPart, ScheduleLine} from "../types";
 import {lastBusinessDayOfNextMonth} from "./dates";
 import {money} from "./format";
 import {saleShare} from "./holder";
@@ -61,6 +61,13 @@ export function buildSchedule(input: CaseInput, totalGainForRatio: number, total
   return [scheduleLine(input.contractDate.slice(0, 7), saleShare(input), totalGainForRatio, totalTax)];
 }
 
+// Prior parts inside the window of the sale in parts. With no prior parts the minimum is Infinity
+// and this sale is the first operation.
+export function summedPriorParts(input: CaseInput): PriorPart[] {
+  const firstYear = Math.min(...input.priorParts.map((part) => Number(part.date.slice(0, 4))));
+  return Number(input.contractDate.slice(0, 4)) <= firstYear + 1 ? input.priorParts : [];
+}
+
 // Sale in parts (spec 4.2, item 10): up to the end of the calendar year after the first operation,
 // gains are summed, the table applies to the total and the tax already paid comes off. Later, this
 // operation stands alone. Prior gains are taxable gains already after reductions, as typed.
@@ -68,10 +75,7 @@ export function applyPriorParts(
   input: CaseInput,
   gain: number,
 ): {totalGain: number; tax: number; priorTaxPaid: number; payable: number} {
-  // With no prior parts the minimum is Infinity and this sale is the first operation.
-  const firstYear = Math.min(...input.priorParts.map((part) => Number(part.date.slice(0, 4))));
-  const summed = Number(input.contractDate.slice(0, 4)) <= firstYear + 1 ? input.priorParts : [];
-
+  const summed = summedPriorParts(input);
   const totalGain = summed.reduce((sum, part) => sum + part.gain, gain);
   const priorTaxPaid = summed.reduce((sum, part) => sum + part.taxPaid, 0);
   const tax = progressiveTax(totalGain).total;
@@ -95,6 +99,7 @@ export function saleModeAlerts(input: CaseInput, taxableGain: number): Alert[] {
       id: "parcelas-diferenca",
       level: "aviso",
       text: `As parcelas informadas somam ${money(total)} e ficam ${money(share - total)} abaixo do valor de alienação do titular (${money(share)}). O cronograma mostra só o informado.`,
+      legal: "IN SRF 84/2001, art. 31",
     });
   }
 

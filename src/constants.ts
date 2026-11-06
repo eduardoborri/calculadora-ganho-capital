@@ -50,6 +50,11 @@ export const SMALL_VALUE_LIMIT = 35_000;
 // Single-property exemption: value up to R$ 440.000,00, no other sale in 5 years
 // (Lei 9.250/1995, art. 23; IN SRF 84/2001, art. 29, I).
 export const SINGLE_PROPERTY_LIMIT = 440_000;
+export const SINGLE_PROPERTY_LOCK_YEARS = 5;
+
+// Fixed rate on a transfer at market value by inheritance, legacy or advance donation, due by the
+// estate or the donor and not calculated here (Lei 9.532/1997, art. 23, par. 1).
+export const TRANSFER_AT_MARKET_RATE = 0.15;
 
 // Reinvestment exemption: proceeds applied within 180 days of the contract
 // (Lei 11.196/2005, art. 39; IN SRF 599/2005, art. 2). Day 180 counts, day 181 does not.

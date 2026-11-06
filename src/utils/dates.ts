@@ -37,6 +37,20 @@ export function addDays(date: string, days: number): string {
   return toIso(utc(y, m, d) + days * 86_400_000);
 }
 
+// Same day and month, `years` later. Without that day (29/02) it falls on the next one, as in
+// Codigo Civil, art. 132, par. 3.
+export function addYears(date: string, years: number): string {
+  const { y, m, d } = parse(date);
+  return toIso(utc(y + years, m, d));
+}
+
+// Brasilia has been a fixed UTC-3 since 2019, so no local-timezone getter is needed.
+const BRASILIA_OFFSET_MS = -3 * 3_600_000;
+
+export function todayInBrazil(): string {
+  return toIso(Date.now() + BRASILIA_OFFSET_MS);
+}
+
 // Real calendar date in ISO form. addDays normalizes overflow, so 2025-02-30 does not round-trip.
 export function isValidDate(date: string): boolean {
   return /^\d{4}-\d{2}-\d{2}$/.test(date) && addDays(date, 0) === date;

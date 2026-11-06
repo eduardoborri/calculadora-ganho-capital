@@ -2,7 +2,7 @@ import {describe, expect, it} from 'vitest';
 import {calculateCase, defaultCaseInput, progressiveTax} from '../src/utils/capitalGain';
 import {formatCurrency} from '../src/utils/format';
 import {applyPriorParts, buildSchedule, saleModeAlerts} from '../src/utils/saleModes';
-import type {CaseInput, CostItem, Installment, PriorPart} from '../src/types';
+import type {Alert, CaseInput, CaseResult, CostItem, Installment, PriorPart} from '../src/types';
 
 function caso(partial: Partial<CaseInput>): CaseInput {
   return {...defaultCaseInput(), ...partial};
@@ -18,6 +18,11 @@ function parte(id: string, date: string, gain: number, taxPaid: number): PriorPa
 
 function item(id: string, date: string, value: number): CostItem {
   return {id, description: id, date, value, hasDocument: true};
+}
+
+// Alerts of this module only: the builder of Task 6 adds others to every case.
+function modeAlerts(r: CaseResult): Alert[] {
+  return r.alerts.filter((alert) => ['parcelas-diferenca', 'prazo-progressiva'].includes(alert.id));
 }
 
 const base = {acquisitionDate: '2015-03-10', contractDate: '2025-10-10', saleValue: 1000000};
@@ -142,7 +147,7 @@ describe('schedule outside an installment sale', () => {
     expect(r.status).toBe('ok');
     expect(r.saleNet).toBe(995000);
     expect(r.schedule).toHaveLength(1);
-    expect(r.alerts).toEqual([]);
+    expect(modeAlerts(r)).toEqual([]);
   });
 
   it('an exempt cash sale has an empty schedule', () => {
@@ -174,7 +179,7 @@ describe('installment sale through calculateCase', () => {
     expect(r.schedule[0].gain).toBeCloseTo(r.taxableBase * 0.6, 6);
     expect(r.schedule[1].tax).toBeCloseTo(r.taxDue * 0.4, 6);
     expect(r.taxPayable).toBeCloseTo(r.taxDue, 6);
-    expect(r.alerts).toEqual([]);
+    expect(modeAlerts(r)).toEqual([]);
   });
 
   it('taxPayable is the sum of the lines, net of installment brokerage', () => {
@@ -229,24 +234,25 @@ describe('alerts of an installment sale', () => {
       }),
     );
     expect(r.status).toBe('ok');
-    expect(r.alerts).toHaveLength(1);
-    expect(r.alerts[0].id).toBe('parcelas-diferenca');
-    expect(r.alerts[0].level).toBe('aviso');
-    expect(r.alerts[0].text).toContain(formatCurrency(100000));
+    const alerts = modeAlerts(r);
+    expect(alerts).toHaveLength(1);
+    expect(alerts[0].id).toBe('parcelas-diferenca');
+    expect(alerts[0].level).toBe('aviso');
+    expect(alerts[0].text).toContain(formatCurrency(100000));
     expect(r.schedule.reduce((sum, line) => sum + line.received, 0)).toBe(900000);
     expect(r.taxPayable).toBeCloseTo(r.taxDue * 0.9, 6);
   });
 
   it('a difference of rounding size gives no alert', () => {
     const installments = [parcela('a', '2025-10-15', 999999.996)];
-    expect(calculateCase(caso({...prazo, installments})).alerts).toEqual([]);
+    expect(modeAlerts(calculateCase(caso({...prazo, installments})))).toEqual([]);
   });
 
   it('a sum above the holder share by up to 0.005 is accepted', () => {
     const installments = [parcela('a', '2025-10-15', 1000000.004)];
     const r = calculateCase(caso({...prazo, installments}));
     expect(r.status).toBe('ok');
-    expect(r.alerts).toEqual([]);
+    expect(modeAlerts(r)).toEqual([]);
   });
 
   it('a sum above the holder share by more than 0.005 is invalid', () => {
@@ -256,7 +262,7 @@ describe('alerts of an installment sale', () => {
 
   it('the sum compares the holder share in a condominium', () => {
     const condo = {...prazo, saleValue: 2000000, ownership: 'condominio' as const, quotaPct: 50};
-    expect(calculateCase(caso({...condo, installments: [total]})).alerts).toEqual([]);
+    expect(modeAlerts(calculateCase(caso({...condo, installments: [total]})))).toEqual([]);
     const above = [parcela('a', '2025-10-15', 1500000)];
     expect(calculateCase(caso({...condo, installments: above})).status).toBe('invalido');
   });
@@ -276,7 +282,7 @@ describe('alerts of an installment sale', () => {
     expect(r.schedule[0].tax).toBeCloseTo(r.taxDue * 0.4, 4);
     expect(r.schedule[1].tax).toBeCloseTo(r.taxDue * 0.6, 4);
     expect(r.taxPayable).toBeCloseTo(r.taxDue, 4);
-    expect(r.alerts.map((alert) => [alert.id, alert.level])).toEqual([['prazo-progressiva', 'aberto']]);
+    expect(modeAlerts(r).map((alert) => [alert.id, alert.level])).toEqual([['prazo-progressiva', 'aberto']]);
   });
 
   it('the open point starts above the first bracket limit', () => {
@@ -427,6 +433,26 @@ describe('sale in parts', () => {
     expect(r.taxPayable).toBe(r.taxDue);
     expect(r.taxDue).toBeCloseTo(progressiveTax(r.taxableBase).total, 6);
   });
+
+  it('an exempt part still settles the prior gains: base 0, tax on the priors, one line', () => {
+    const r = calculateCase(
+      caso({
+        ...partes,
+        saleValue: 30000,
+        smallValue: {sameNatureMonthTotal: 30000, confirmed: true},
+        priorParts: [parte('a', '2025-02-10', 1000000, 100000)],
+      }),
+    );
+    expect(r.status).toBe('ok');
+    expect(r.exemption.small.applies).toBe(true);
+    expect(r.taxableBase).toBe(0);
+    expect(r.taxDue).toBe(150000);
+    expect(r.priorTaxPaid).toBe(100000);
+    expect(r.taxPayable).toBe(50000);
+    expect(r.schedule).toHaveLength(1);
+    expect(r.schedule[0].gain).toBe(0);
+    expect(r.schedule[0].tax).toBe(50000);
+  });
 });
 
 describe('validation of prior parts', () => {
@@ -454,5 +480,14 @@ describe('validation of prior parts', () => {
     const same = [parte('a', '2025-10-10', 1000, 150)];
     expect(calculateCase(caso({...partes, priorParts: after})).status).toBe('invalido');
     expect(calculateCase(caso({...partes, priorParts: same})).status).toBe('ok');
+  });
+
+  it('a part before the acquisition is invalid, and on the acquisition date is accepted', () => {
+    const before = [parte('a', '2015-03-09', 1000, 150)];
+    const same = [parte('a', '2015-03-10', 1000, 150)];
+    const r = calculateCase(caso({...partes, contractDate: '2016-01-10', priorParts: before}));
+    expect(r.status).toBe('invalido');
+    expect(r.missing[0]).toContain('anterior à aquisição');
+    expect(calculateCase(caso({...partes, contractDate: '2016-01-10', priorParts: same})).status).toBe('ok');
   });
 });

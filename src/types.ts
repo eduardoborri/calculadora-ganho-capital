@@ -43,6 +43,8 @@ export interface Application {
   kind: "aquisicao" | "quitacao";
 }
 
+// caa and dta are entered for the whole property and scale by the quota, like cost items.
+// taxPaidSelic is the holder's own tax, as typed, and is never scaled.
 export interface ValueUpdate {
   law: "14973" | "rearp";
   date: string;
@@ -62,6 +64,7 @@ export interface ValueUpdate {
 // Installment.value and Installment.brokerage are also the holder's part, as typed. In saleMode
 // "prazo" the case brokerage is not used: brokerage comes from each installment.
 // PriorPart.gain is the taxable gain of that part, already after reductions, as typed.
+// With `update` present, costItems and landRule are ignored: the update sets the cost lines.
 export interface CaseInput {
   taxpayerName: string;
   calendarYear: number;
@@ -127,7 +130,7 @@ export interface Alert {
   id: string;
   level: "info" | "aviso" | "risco" | "aberto";
   text: string;
-  legal?: string;
+  legal: string;
 }
 
 export type CaseStatus = "ok" | "incompleto" | "invalido" | "fora_de_escopo";

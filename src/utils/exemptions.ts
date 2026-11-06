@@ -1,8 +1,13 @@
 // Exemptions and reinvestment (spec 4.2, items 7 and 8). Pure functions, full precision.
 
-import {REINVESTMENT_DAYS, SINGLE_PROPERTY_LIMIT, SMALL_VALUE_LIMIT} from "../constants";
+import {
+  REINVESTMENT_DAYS,
+  SINGLE_PROPERTY_LIMIT,
+  SINGLE_PROPERTY_LOCK_YEARS,
+  SMALL_VALUE_LIMIT,
+} from "../constants";
 import type {CaseInput, CaseResult, ExemptionCheck} from "../types";
-import {addDays, isValidDate} from "./dates";
+import {addDays, addYears, isValidDate} from "./dates";
 import {money} from "./format";
 import {saleShare} from "./holder";
 
@@ -27,6 +32,15 @@ export function checkSmallValue(input: CaseInput): ExemptionCheck {
   return {applies: reasons.length === 0, reasons};
 }
 
+// An earlier part of this sale is another sale in the period. Prior parts count only in "partes":
+// other modes may hold them from an earlier choice on screen.
+function hasRecentPriorPart(input: CaseInput): boolean {
+  if (input.saleMode !== "partes" || !isValidDate(input.contractDate)) return false;
+  return input.priorParts.some(
+    (part) => isValidDate(part.date) && input.contractDate < addYears(part.date, SINGLE_PROPERTY_LOCK_YEARS),
+  );
+}
+
 // Single property (Lei 9.250/1995, art. 23): the limit compares the holder's sale value,
 // before brokerage.
 export function checkSingleProperty(input: CaseInput): ExemptionCheck {
@@ -34,7 +48,14 @@ export function checkSingleProperty(input: CaseInput): ExemptionCheck {
   const reasons: string[] = [];
   if (!onlyProperty) reasons.push("Marque que este é o único imóvel do alienante.");
   if (!noSaleIn5Years) {
-    reasons.push("Marque que o alienante não vendeu outro imóvel, tributado ou não, nos últimos 5 anos.");
+    reasons.push(
+      `Marque que o alienante não vendeu outro imóvel, tributado ou não, nos últimos ${SINGLE_PROPERTY_LOCK_YEARS} anos.`,
+    );
+  }
+  if (hasRecentPriorPart(input)) {
+    reasons.push(
+      `Há parte anterior desta alienação nos ${SINGLE_PROPERTY_LOCK_YEARS} anos antes do contrato: ela conta como outra alienação e afasta a isenção do único imóvel.`,
+    );
   }
   const value = saleShare(input);
   if (!(value <= SINGLE_PROPERTY_LIMIT)) {

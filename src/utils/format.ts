@@ -37,6 +37,9 @@ export function round2(value: number): number {
 // Amount for pt-BR text, in cents.
 export const money = (value: number): string => formatCurrency(round2(value));
 
+// ISO date for pt-BR text: 2026-06-30 → "30/06/2026".
+export const formatDate = (iso: string): string => iso.split("-").reverse().join("/");
+
 // Correction factors are shown with 6 decimals: 0.5059546 → "0,505955".
 export const formatFactor = (value: number): string =>
   new Intl.NumberFormat("pt-BR", {

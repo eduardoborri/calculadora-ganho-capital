@@ -67,6 +67,53 @@ describe('single property exemption', () => {
     }
   });
 
+  describe('with prior parts of a sale in parts', () => {
+    const check = (date: string, saleMode: CaseInput['saleMode'] = 'partes') =>
+      checkSingleProperty(
+        caso({
+          contractDate: '2025-10-10',
+          saleValue: 300000,
+          saleMode,
+          singleProperty: single,
+          priorParts: [{id: 'a', date, gain: 1000, taxPaid: 150}],
+        }),
+      );
+
+    it('a part less than 5 years before the contract blocks it and explains', () => {
+      const out = check('2020-10-11');
+      expect(out.applies).toBe(false);
+      expect(out.reasons).toHaveLength(1);
+      expect(out.reasons[0]).toContain('parte anterior');
+    });
+
+    it('a part on the contract date blocks it', () => {
+      expect(check('2025-10-10').applies).toBe(false);
+    });
+
+    it('a part exactly 5 years before the contract does not block it', () => {
+      expect(check('2020-10-10')).toEqual({applies: true, reasons: []});
+    });
+
+    it('parts left on the input of another mode do not count', () => {
+      expect(check('2024-10-10', 'vista').applies).toBe(true);
+      expect(check('2024-10-10', 'prazo').applies).toBe(true);
+    });
+
+    it('calculateCase keeps the tax when a recent part blocks the exemption', () => {
+      const r = calculateCase(
+        caso({
+          ...base,
+          saleValue: 300000,
+          saleMode: 'partes',
+          singleProperty: single,
+          priorParts: [{id: 'a', date: '2025-02-10', gain: 1000, taxPaid: 150}],
+        }),
+      );
+      expect(r.exemption.single.applies).toBe(false);
+      expect(r.taxableBase).toBeGreaterThan(0);
+    });
+  });
+
   it('the limit uses the sale value before brokerage', () => {
     const input = caso({saleValue: 450000, brokerage: 20000, singleProperty: single});
     expect(checkSingleProperty(input).applies).toBe(false);

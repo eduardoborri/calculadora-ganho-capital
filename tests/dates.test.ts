@@ -1,11 +1,22 @@
 import {describe, expect, it} from 'vitest';
 import {
   addDays,
+  addYears,
   completedMonths,
   isNationalHoliday,
   lastBusinessDayOfNextMonth,
   monthsInclusive,
 } from '../src/utils/dates';
+
+describe('addYears', () => {
+  it('keeps day and month', () => {
+    expect(addYears('2026-01-15', 5)).toBe('2031-01-15');
+  });
+
+  it('without the same day it falls on the next one', () => {
+    expect(addYears('2024-02-29', 5)).toBe('2029-03-01');
+  });
+});
 
 describe('monthsInclusive', () => {
   it('counts first and last month', () => {

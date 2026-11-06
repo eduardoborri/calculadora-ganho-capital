@@ -24,7 +24,10 @@ import type {
   ItemReduction,
   OutOfScope,
   PriorPart,
+  ValueUpdate,
 } from "../types";
+import {buildAlerts} from "./alerts";
+import {filledItems} from "./costItems";
 import {isValidDate, monthsInclusive} from "./dates";
 import {checkSingleProperty, checkSmallValue, reinvestmentOutcome} from "./exemptions";
 import {money} from "./format";
@@ -34,10 +37,10 @@ import {
   INSTALLMENT_TOLERANCE,
   installmentsBrokerage,
   installmentsTotal,
-  saleModeAlerts,
   settleTax,
 } from "./saleModes";
 import {progressiveTax} from "./taxTable";
+import {applyValueUpdate, isRearpReversal} from "./valueUpdate";
 
 export {progressiveTax};
 
@@ -123,15 +126,6 @@ export function correctedCost(item: CostItem): number {
   if (!usesCostIndex(item)) return item.value;
   const index = itemIndex(item);
   return index === null ? 0 : item.original.amount / index;
-}
-
-// A row the user left untouched: it is neither a cost nor a pending field.
-function isBlankItem(item: CostItem): boolean {
-  return item.value === 0 && !item.original && !item.date.trim() && !item.description.trim();
-}
-
-function filledItems(input: CaseInput): CostItem[] {
-  return input.costItems.filter((item) => !isBlankItem(item));
 }
 
 // ---- Scope and validation ----
@@ -249,11 +243,46 @@ function checkCostItem(item: CostItem, input: CaseInput, issues: Issues): void {
   }
 }
 
+// With an update the cost comes from it, so cost items and the land rule are not looked at.
 function checkCost(input: CaseInput, issues: Issues): void {
+  if (input.update) return;
   const items = filledItems(input);
   items.forEach((item) => checkCostItem(item, input, issues));
   if (input.landRule && !items.some((item) => item.isLand)) {
     issues.missing.push("Terreno (item de custo marcado)");
+  }
+}
+
+function checkUpdateDates(update: ValueUpdate, input: CaseInput, issues: Issues): void {
+  checkDateField(update.date, "Data da atualização", issues);
+  checkDateField(update.originalAcquisitionDate, "Data de aquisição original", issues);
+  if (!isValidDate(update.date)) return;
+  if (isValidDate(input.contractDate) && update.date > input.contractDate) {
+    issues.invalid.push("A data da atualização não pode ser posterior à data de alienação.");
+  }
+  if (isValidDate(update.originalAcquisitionDate) && update.date < update.originalAcquisitionDate) {
+    issues.invalid.push("A data da atualização não pode ser anterior à data de aquisição original.");
+  }
+}
+
+function checkUpdateAmount(value: number, label: string, issues: Issues): void {
+  if (!isValidAmount(value)) issues.invalid.push(`${label} deve ser um número positivo de até 1 quatrilhão.`);
+  else if (value === 0) issues.missing.push(label);
+}
+
+function checkUpdate(input: CaseInput, issues: Issues): void {
+  const {update} = input;
+  if (!update) return;
+  checkUpdateDates(update, input, issues);
+  checkUpdateAmount(update.caa, "CAA", issues);
+  checkUpdateAmount(update.dta, "DTA", issues);
+
+  const label = "Imposto pago corrigido pela Selic";
+  const datesKnown = isValidDate(update.date) && isValidDate(input.contractDate);
+  if (!isValidAmount(update.taxPaidSelic)) {
+    issues.invalid.push(`${label} deve ser um número positivo de até 1 quatrilhão.`);
+  } else if (update.taxPaidSelic === 0 && datesKnown && isRearpReversal(update, input.contractDate)) {
+    issues.missing.push(label);
   }
 }
 
@@ -295,6 +324,9 @@ function checkPriorPart(part: PriorPart, input: CaseInput, issues: Issues): void
   if (isValidDate(input.contractDate) && isValidDate(part.date) && part.date > input.contractDate) {
     issues.invalid.push(`A parte anterior de ${part.date} tem data posterior à alienação.`);
   }
+  if (isValidDate(input.acquisitionDate) && isValidDate(part.date) && part.date < input.acquisitionDate) {
+    issues.invalid.push(`A parte anterior de ${part.date} tem data anterior à aquisição.`);
+  }
   if (!isValidAmount(part.gain) || !isValidAmount(part.taxPaid)) {
     issues.invalid.push("O ganho e o imposto pago da parte anterior devem ser números positivos de até 1 quatrilhão.");
   }
@@ -310,6 +342,7 @@ function checkInput(input: CaseInput): Issues {
   checkDates(input, issues);
   checkSale(input, issues);
   checkCost(input, issues);
+  checkUpdate(input, issues);
   checkApplications(input, issues);
   checkInstallments(input, issues);
   checkPriorParts(input, issues);
@@ -431,12 +464,16 @@ export function calculateCase(input: CaseInput): CaseResult {
   if (invalid.length > 0) return blockedResult("invalido", [...invalid, ...missing]);
   if (missing.length > 0) return blockedResult("incompleto", missing);
 
+  // The update replaces the cost items. Its lines hold no land item, so the land rule is off.
+  const updated = applyValueUpdate(input);
+  const costInput = input.update ? {...input, costItems: updated.costItems, landRule: false} : input;
+
   const saleNet = computeSaleNet(input);
-  const lines = costLines(input);
+  const lines = costLines(costInput);
   const totalCost = lines.reduce((sum, line) => sum + line.cost, 0);
   const grossGain = saleNet - totalCost;
 
-  const items = reduceGain(input, lines, totalCost, grossGain);
+  const items = reduceGain(costInput, lines, totalCost, grossGain);
   const gainAfterReductions = items.reduce((sum, item) => sum + item.reducedGain, 0);
 
   // Exemptions are all or nothing and come before the table; reinvestment scales the gain.
@@ -446,13 +483,16 @@ export function calculateCase(input: CaseInput): CaseResult {
   const taxableBase = exempt ? 0 : gainAfterReductions * reinvestment.taxedShare;
 
   // In "partes" the table may run on a total larger than this sale's taxableBase.
-  const {totalGain, tax: taxDue, priorTaxPaid, payable} = settleTax(input, taxableBase);
+  const {totalGain, tax: taxDue, priorTaxPaid: partsTaxPaid} = settleTax(input, taxableBase);
   const {brackets} = progressiveTax(totalGain);
+  // The Rearp deduction counts in every sale mode, also with prior parts out of the window.
+  const priorTaxPaid = partsTaxPaid + updated.deductFromTax;
+  const payable = Math.max(0, taxDue - priorTaxPaid);
   const schedule = buildSchedule(input, taxableBase, payable);
   // In "prazo" only what was typed is due, so the lines set the amount payable.
   const taxPayable = input.saleMode === "prazo" ? schedule.reduce((sum, line) => sum + line.tax, 0) : payable;
 
-  return {
+  const partial: CaseResult = {
     status: "ok",
     missing: [],
     saleNet,
@@ -468,6 +508,7 @@ export function calculateCase(input: CaseInput): CaseResult {
     priorTaxPaid,
     taxPayable,
     schedule,
-    alerts: saleModeAlerts(input, taxableBase),
+    alerts: updated.alerts,
   };
+  return {...partial, alerts: buildAlerts(input, partial)};
 }
