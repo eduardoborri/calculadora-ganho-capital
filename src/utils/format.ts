@@ -27,9 +27,11 @@ export function parseCurrencyBR(raw: string): number {
 }
 
 // Rounds to cents without floating-point drift (1.005 → 1.01).
-// Trims the product to 15 significant digits first to drop binary noise.
+// Rounds the magnitude (half away from zero) and restores the sign; never -0.
+// Trims first to 15 significant digits to drop binary noise.
 export function round2(value: number): number {
-  return Math.round(Number((value * 100).toPrecision(15))) / 100;
+  const magnitude = Math.round(Number((Math.abs(value) * 100).toPrecision(15))) / 100;
+  return value < 0 && magnitude !== 0 ? -magnitude : magnitude;
 }
 
 // Correction factors are shown with 6 decimals: 0.5059546 → "0,505955".

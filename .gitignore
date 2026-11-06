@@ -8,7 +8,7 @@ coverage/
 !.env.example
 
 # Client data must never be committed: spreadsheets, declarations and
-# input files for tools/planilha_irpfm.py.
+# input files.
 *.xlsx
 *.xls
 *.pdf

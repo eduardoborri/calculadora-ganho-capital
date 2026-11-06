@@ -21,7 +21,7 @@ export default function CurrencyInput({
   const [displayValue, setDisplayValue] = useState(formatDisplay(value));
 
   // Keep the displayed text in sync when the value is changed from outside
-  // this input (e.g. the simulator writing into the detailed form).
+  // this input (e.g. a parent updating the value programmatically).
   useEffect(() => {
     setDisplayValue(formatDisplay(value));
   }, [value]);
