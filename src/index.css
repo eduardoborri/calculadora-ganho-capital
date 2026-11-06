@@ -1,0 +1,148 @@
+@import "tailwindcss";
+
+/*
+ * Aptos (Microsoft) is used from the fonts installed on the machine — it ships
+ * with Windows 11 / Microsoft 365 and its license doesn't allow hosting the
+ * files. Each weight maps to the locally installed face, under both the
+ * full name and the PostScript name, so the regular body text and the bold
+ * headings/values each get the real face instead of a synthesized one.
+ *
+ * Where Aptos isn't installed, Inter (SIL OFL, the face the PDF report already
+ * embeds) is served from public/fonts, so every machine gets the same metrics
+ * instead of falling back to Segoe UI or the system face.
+ */
+@font-face { font-family: "AptosApp"; font-weight: 400; src: local("Aptos"), local("Aptos-Regular"); }
+@font-face { font-family: "AptosApp"; font-weight: 500 600; src: local("Aptos SemiBold"), local("Aptos-SemiBold"); }
+@font-face { font-family: "AptosApp"; font-weight: 700; src: local("Aptos Bold"), local("Aptos-Bold"); }
+@font-face { font-family: "AptosApp"; font-weight: 800 900; src: local("Aptos ExtraBold"), local("Aptos-ExtraBold"), local("Aptos Black"), local("Aptos-Black"); }
+@font-face { font-family: "InterApp"; font-weight: 400; font-display: swap; src: url("/fonts/Inter-400.ttf") format("truetype"); }
+@font-face { font-family: "InterApp"; font-weight: 500 600; font-display: swap; src: url("/fonts/Inter-600.ttf") format("truetype"); }
+@font-face { font-family: "InterApp"; font-weight: 700 900; font-display: swap; src: url("/fonts/Inter-700.ttf") format("truetype"); }
+
+/*
+ * Palette (design plan): ink for text, GSGA petróleo for headings and the
+ * calculation memo, GSGA verde for credits/redutor/links, coral only for
+ * alerts and tax due, a cool green-tinted paper for the page, and a rule
+ * colour for separators and field borders.
+ */
+@theme {
+  --color-ink: #1d2b2a;
+  --color-primary: #143e3c;
+  --color-secondary: #238783;
+  --color-accent: #e94b41;
+  --color-paper: #ede6b6;
+  --color-rule: #d5dedc;
+  --color-background: #ede6b6;
+  --color-text-gray: #4a5856;
+
+  --font-sans: "AptosApp", "InterApp", ui-sans-serif, system-ui, sans-serif;
+}
+
+@layer base {
+  body {
+    @apply bg-paper text-ink font-sans;
+    /* Regular (400) for running text: the light weight read thin and grey on
+       screens, and turned into Segoe UI Light where Aptos is missing. */
+    font-weight: 400;
+  }
+
+  /* Aligned digits in every amount column and field. Not on the whole body:
+     Inter's tabular set also widens the hyphen ("IRPF-M", "GSGA-PR"). Other
+     figures take the tabular-nums utility. */
+  td,
+  th,
+  input {
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+/* Component classes sit in the components layer so a utility on the element
+   (py-6, px-0, max-sm:p-0) overrides them. */
+@layer components {
+  /* Surfaces: white on paper with a rule border — no drop shadows. Radius follows
+     hierarchy: 4px fields and buttons, 8px panels. */
+  .card {
+    @apply bg-white rounded-lg border border-rule overflow-hidden;
+  }
+
+  .input-field {
+    @apply w-full px-4 py-2 rounded-lg border border-gray-300 focus:ring-2 focus:ring-secondary focus:border-transparent outline-none transition-all text-primary;
+  }
+
+  .btn-primary {
+    @apply px-6 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors font-medium;
+  }
+
+  .btn-secondary {
+    @apply px-6 py-2 bg-secondary text-white rounded-lg hover:bg-secondary/90 transition-colors font-medium;
+  }
+
+  /* Tables read like a demonstrativo: plain column heads over a rule, thin rules
+     between rows, totals over a double rule. */
+  .table-header {
+    @apply px-4 py-2.5 text-left text-xs font-semibold text-text-gray border-b border-rule bg-paper/60;
+  }
+
+  .table-cell {
+    @apply px-4 py-2.5 border-b border-rule/60 text-sm;
+  }
+
+  .table-total td {
+    @apply px-4 py-3 text-sm font-semibold text-primary;
+    border-top: 3px double var(--color-rule);
+  }
+
+  /* Section heading over the tables: type and space, not a coloured box. */
+  .section-title {
+    @apply text-[21px] leading-tight font-semibold text-primary;
+  }
+
+  .text-action {
+    @apply inline-flex items-center gap-1.5 text-sm font-semibold text-secondary hover:text-primary rounded px-1 cursor-pointer whitespace-nowrap;
+  }
+
+  /* Two-option switch (period, deduction mode): one white pill on a paper track. */
+  .segmented {
+    @apply inline-flex gap-1 p-1 bg-paper border border-rule rounded;
+  }
+
+  .segmented button {
+    @apply px-3 py-1.5 text-sm rounded text-text-gray hover:text-primary cursor-pointer;
+  }
+
+  .segmented button[aria-pressed="true"] {
+    @apply bg-white text-primary font-semibold border border-rule;
+  }
+
+  /* Outlined header button; the filled variant marks the screen's one primary action. */
+  .btn-outline {
+    @apply flex items-center gap-2 text-sm font-semibold bg-white text-primary px-4 py-2.5 rounded border-2 border-primary hover:bg-paper transition-colors cursor-pointer disabled:cursor-not-allowed disabled:border-rule disabled:text-text-gray disabled:hover:bg-white;
+  }
+
+  .btn-filled {
+    @apply flex items-center gap-2 text-sm font-semibold bg-primary text-white px-4 py-2.5 rounded border-2 border-primary hover:bg-primary/90 transition-colors cursor-pointer;
+  }
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-secondary);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* Hide number input arrows */
+.no-arrows::-webkit-outer-spin-button,
+.no-arrows::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.no-arrows {
+  -moz-appearance: textfield;
+}
