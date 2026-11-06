@@ -587,10 +587,8 @@ describe('neutral values until the next tasks', () => {
     const r = calculateCase(
       caso({acquisitionDate: '2015-03-10', contractDate: '2025-10-10', saleValue: 500000, brokerage: 1000}),
     );
-    expect(r.exemption).toEqual({
-      small: {applies: false, reasons: []},
-      single: {applies: false, reasons: []},
-    });
+    expect(r.exemption.small.applies).toBe(false);
+    expect(r.exemption.single.applies).toBe(false);
     expect(r.reinvestment).toEqual({deadline: null, applied: 0, proceeds: 499000, taxedShare: 1});
     expect(r.schedule).toEqual([]);
     expect(r.alerts).toEqual([]);

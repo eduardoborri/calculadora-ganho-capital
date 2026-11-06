@@ -37,6 +37,11 @@ export function addDays(date: string, days: number): string {
   return toIso(utc(y, m, d) + days * 86_400_000);
 }
 
+// Real calendar date in ISO form. addDays normalizes overflow, so 2025-02-30 does not round-trip.
+export function isValidDate(date: string): boolean {
+  return /^\d{4}-\d{2}-\d{2}$/.test(date) && addDays(date, 0) === date;
+}
+
 // Easter Sunday (Anonymous Gregorian algorithm), returned as ISO date.
 function easter(year: number): string {
   const a = year % 19;

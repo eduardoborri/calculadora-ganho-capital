@@ -25,7 +25,9 @@ import type {
   ItemReduction,
   OutOfScope,
 } from "../types";
-import {addDays, monthsInclusive} from "./dates";
+import {monthsInclusive, isValidDate} from "./dates";
+import {checkSingleProperty, checkSmallValue, reinvestmentOutcome} from "./exemptions";
+import {holderFraction, saleShare} from "./holder";
 
 export function defaultCaseInput(): CaseInput {
   return {
@@ -147,11 +149,6 @@ const OUT_OF_SCOPE_REASONS: Record<OutOfScope, string> = {
   permuta_torna: "Permuta com torna: caso fora do escopo da ferramenta.",
 };
 
-// Real calendar date in ISO form. addDays normalizes overflow, so 2025-02-30 does not round-trip.
-function isValidDate(date: string): boolean {
-  return /^\d{4}-\d{2}-\d{2}$/.test(date) && addDays(date, 0) === date;
-}
-
 // Sanity ceiling, not a legal value: keeps products and sums finite, so overflow cannot
 // reach the result as NaN with status ok.
 const MAX_AMOUNT = 1e15;
@@ -252,16 +249,6 @@ function checkInput(input: CaseInput): Issues {
 
 // ---- Calculation steps ----
 
-// Holder's fraction of the property: the quota in a condominium, the whole asset otherwise,
-// including marital community (IN SRF 84/2001, arts. 19, IV, and 22).
-function holderFraction(input: CaseInput): number {
-  return input.ownership === "condominio" ? input.quotaPct / 100 : 1;
-}
-
-function saleShare(input: CaseInput): number {
-  return input.saleValue * holderFraction(input);
-}
-
 // Brokerage paid by the seller comes off the sale value (IN SRF 84/2001, art. 19, par. 4).
 function computeSaleNet(input: CaseInput): number {
   return saleShare(input) - input.brokerage;
@@ -341,10 +328,6 @@ function neutralExemption(): ExemptionCheck {
   return {applies: false, reasons: []};
 }
 
-function neutralReinvestment(saleNet: number): CaseResult["reinvestment"] {
-  return {deadline: null, applied: 0, proceeds: saleNet, taxedShare: 1};
-}
-
 function blockedResult(status: CaseStatus, missing: string[]): CaseResult {
   return {
     status,
@@ -382,9 +365,11 @@ export function calculateCase(input: CaseInput): CaseResult {
   const items = reduceGain(input, lines, totalCost, grossGain);
   const gainAfterReductions = items.reduce((sum, item) => sum + item.reducedGain, 0);
 
-  const exemption = {small: neutralExemption(), single: neutralExemption()};
-  const reinvestment = neutralReinvestment(saleNet);
-  const taxableBase = gainAfterReductions * reinvestment.taxedShare;
+  // Exemptions are all or nothing and come before the table; reinvestment scales the gain.
+  const exemption = {small: checkSmallValue(input), single: checkSingleProperty(input)};
+  const reinvestment = reinvestmentOutcome(input, saleNet);
+  const exempt = exemption.small.applies || exemption.single.applies;
+  const taxableBase = exempt ? 0 : gainAfterReductions * reinvestment.taxedShare;
 
   const {brackets, total: taxDue} = progressiveTax(taxableBase);
   const priorTaxPaid = 0;
