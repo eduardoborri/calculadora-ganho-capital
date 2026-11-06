@@ -258,3 +258,82 @@ describe('integration with calculateCase', () => {
     expect(r.taxDue).toBe(0);
   });
 });
+
+describe('fix round 1', () => {
+  const ready = {...base, saleValue: 500000};
+
+  it('applications before the contract do not count; the contract day does', () => {
+    const input = (date: string) =>
+      caso({contractDate: '2026-01-10', reinvestment: reinv({applications: [app('a', date, 100000)]})});
+    expect(reinvestmentOutcome(input('2026-01-09'), 1000000).applied).toBe(0);
+    expect(reinvestmentOutcome(input('2026-01-10'), 1000000).applied).toBe(100000);
+  });
+
+  it('with several sales, an application between the first contract and this one does not count', () => {
+    const input = caso({
+      contractDate: '2026-03-01',
+      reinvestment: reinv({
+        moreThanOneSale: true,
+        firstContractDate: '2026-01-01',
+        applications: [app('a', '2026-02-01', 100000), app('b', '2026-03-01', 50000)],
+      }),
+    });
+    expect(reinvestmentOutcome(input, 1000000).applied).toBe(50000);
+  });
+
+  it('firstContractDate is ignored without moreThanOneSale', () => {
+    const input = caso({
+      contractDate: '2026-03-01',
+      reinvestment: reinv({firstContractDate: '2026-01-01'}),
+    });
+    expect(reinvestmentOutcome(input, 1000000).deadline).toBe('2026-08-28');
+  });
+
+  it('empty firstContractDate with moreThanOneSale falls back to the contract', () => {
+    const input = caso({contractDate: '2026-01-01', reinvestment: reinv({moreThanOneSale: true})});
+    expect(reinvestmentOutcome(input, 1000000).deadline).toBe('2026-06-30');
+    expect(calculateCase(caso({...ready, reinvestment: reinv({moreThanOneSale: true})})).status).toBe('ok');
+  });
+
+  it('malformed or later firstContractDate is invalid', () => {
+    const run = (firstContractDate: string) =>
+      calculateCase(caso({...ready, reinvestment: reinv({moreThanOneSale: true, firstContractDate})}));
+    const bad = run('2025-02-30');
+    expect(bad.status).toBe('invalido');
+    expect(bad.missing[0]).toContain('primeiro contrato');
+    const late = run('2025-11-01');
+    expect(late.status).toBe('invalido');
+    expect(late.missing[0]).toContain('posterior');
+    expect(run('2025-09-01').status).toBe('ok');
+  });
+
+  it('firstContractDate is not validated without moreThanOneSale or when disabled', () => {
+    expect(calculateCase(caso({...ready, reinvestment: reinv({firstContractDate: 'x'})})).status).toBe('ok');
+    const off = reinv({enabled: false, moreThanOneSale: true, firstContractDate: 'x'});
+    expect(calculateCase(caso({...ready, reinvestment: off})).status).toBe('ok');
+  });
+
+  it('small value counts this sale in the month total', () => {
+    const check = checkSmallValue(
+      caso({saleValue: 1000000, smallValue: {sameNatureMonthTotal: 0, confirmed: true}}),
+    );
+    expect(check.applies).toBe(false);
+    expect(check.reasons[0]).toContain('supera o limite');
+  });
+
+  it('quota 55 on 800,000 is exactly 440,000 and the single exemption applies', () => {
+    const input = caso({saleValue: 800000, ownership: 'condominio', quotaPct: 55, singleProperty: single});
+    expect(checkSingleProperty(input).applies).toBe(true);
+    const r = calculateCase(caso({...ready, saleValue: 800000, ownership: 'condominio', quotaPct: 55}));
+    expect(r.saleNet).toBe(440000);
+  });
+
+  it('application values are validated when reinvestment is enabled', () => {
+    for (const value of [-1, NaN, Infinity, 1e16]) {
+      const r = calculateCase(caso({...ready, reinvestment: reinv({applications: [app('a', '2026-01-10', value)]})}));
+      expect(r.status).toBe('invalido');
+    }
+    const off = reinv({enabled: false, applications: [app('a', '2026-01-10', -1)]});
+    expect(calculateCase(caso({...ready, reinvestment: off})).status).toBe('ok');
+  });
+});

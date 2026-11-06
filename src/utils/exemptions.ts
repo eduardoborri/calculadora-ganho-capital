@@ -3,26 +3,27 @@
 import {REINVESTMENT_DAYS, SINGLE_PROPERTY_LIMIT, SMALL_VALUE_LIMIT} from "../constants";
 import type {CaseInput, CaseResult, ExemptionCheck} from "../types";
 import {addDays, isValidDate} from "./dates";
+import {formatCurrency, round2} from "./format";
 import {saleShare} from "./holder";
 
-function brl(value: number): string {
-  return `R$ ${value.toLocaleString("pt-BR", {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
-}
+const money = (value: number): string => formatCurrency(round2(value));
 
 // Small value (IN SRF 599/2005, art. 1): all or nothing. The total is the holder's part, as typed.
+// The month total includes this sale, so the larger of the two is compared to the limit.
 export function checkSmallValue(input: CaseInput): ExemptionCheck {
   const {sameNatureMonthTotal: total, confirmed} = input.smallValue;
   const reasons: string[] = [];
   if (!confirmed) {
     reasons.push(
-      `Confirme que o total de bens da mesma natureza alienados no mês, na parte do titular, não passa de ${brl(SMALL_VALUE_LIMIT)}.`,
+      `Confirme que o total de bens da mesma natureza alienados no mês, na parte do titular, não passa de ${money(SMALL_VALUE_LIMIT)}.`,
     );
   }
+  const effective = Math.max(total, saleShare(input));
   if (!Number.isFinite(total) || total < 0) {
     reasons.push("Informe um total válido de bens da mesma natureza alienados no mês.");
-  } else if (total > SMALL_VALUE_LIMIT) {
+  } else if (effective > SMALL_VALUE_LIMIT) {
     reasons.push(
-      `O total de bens da mesma natureza no mês (${brl(total)}) supera o limite de ${brl(SMALL_VALUE_LIMIT)}.`,
+      `O total de bens da mesma natureza no mês (${money(effective)}) supera o limite de ${money(SMALL_VALUE_LIMIT)}.`,
     );
   }
   return {applies: reasons.length === 0, reasons};
@@ -40,7 +41,7 @@ export function checkSingleProperty(input: CaseInput): ExemptionCheck {
   const value = saleShare(input);
   if (!(value <= SINGLE_PROPERTY_LIMIT)) {
     reasons.push(
-      `O valor de alienação do titular (${brl(value)}) supera o limite de ${brl(SINGLE_PROPERTY_LIMIT)}.`,
+      `O valor de alienação do titular (${money(value)}) supera o limite de ${money(SINGLE_PROPERTY_LIMIT)}.`,
     );
   }
   return {applies: reasons.length === 0, reasons};
@@ -51,13 +52,16 @@ export function reinvestmentOutcome(input: CaseInput, proceeds: number): CaseRes
   const {reinvestment} = input;
   if (!reinvestment.enabled) return {deadline: null, applied: 0, proceeds, taxedShare: 1};
 
-  const start = reinvestment.firstContractDate.trim() || input.contractDate;
+  // Only with several sales does the deadline count from the first contract.
+  const first = reinvestment.moreThanOneSale ? reinvestment.firstContractDate.trim() : "";
+  const start = first || input.contractDate;
   if (!isValidDate(start)) return {deadline: null, applied: 0, proceeds, taxedShare: 1};
   const deadline = addDays(start, REINVESTMENT_DAYS);
 
-  // Both kinds (acquisition and settlement of financing) count; late or undated ones do not.
+  // Both kinds (acquisition and settlement of financing) count. Undated ones, ones before this
+  // sale's contract and late ones do not.
   const applied = reinvestment.applications
-    .filter((app) => isValidDate(app.date) && app.date <= deadline)
+    .filter((app) => isValidDate(app.date) && app.date >= input.contractDate && app.date <= deadline)
     .filter((app) => Number.isFinite(app.value) && app.value > 0)
     .reduce((sum, app) => sum + app.value, 0);
 

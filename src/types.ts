@@ -57,6 +57,8 @@ export interface ValueUpdate {
 // Amount convention: saleValue and costItems are entered for the whole property. Only with
 // ownership "condominio" both scale by quotaPct; "exclusivo" and "comunhao" ignore it.
 // brokerage is what the holder paid and is never scaled.
+// Application.value and smallValue.sameNatureMonthTotal are the holder's part, as typed:
+// they are never scaled by the quota, unlike saleValue and cost items (whole property).
 export interface CaseInput {
   taxpayerName: string;
   calendarYear: number;

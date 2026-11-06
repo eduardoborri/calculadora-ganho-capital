@@ -25,9 +25,9 @@ import type {
   ItemReduction,
   OutOfScope,
 } from "../types";
-import {monthsInclusive, isValidDate} from "./dates";
+import {isValidDate, monthsInclusive} from "./dates";
 import {checkSingleProperty, checkSmallValue, reinvestmentOutcome} from "./exemptions";
-import {holderFraction, saleShare} from "./holder";
+import {holderPart, saleShare} from "./holder";
 
 export function defaultCaseInput(): CaseInput {
   return {
@@ -187,6 +187,28 @@ function checkDates(input: CaseInput, issues: Issues): void {
   ) {
     issues.invalid.push("A data de alienação não pode ser anterior à data de aquisição.");
   }
+  checkFirstContract(input, issues);
+}
+
+// With several sales the deadline counts from the first contract. Empty falls back to the sale.
+function checkFirstContract(input: CaseInput, issues: Issues): void {
+  const {enabled, moreThanOneSale, firstContractDate} = input.reinvestment;
+  if (!enabled || !moreThanOneSale || !firstContractDate.trim()) return;
+  if (!isValidDate(firstContractDate)) {
+    issues.invalid.push(`Data do primeiro contrato inválida: ${firstContractDate}.`);
+  } else if (isValidDate(input.contractDate) && firstContractDate > input.contractDate) {
+    issues.invalid.push("A data do primeiro contrato não pode ser posterior à data de alienação.");
+  }
+}
+
+function checkApplications(input: CaseInput, issues: Issues): void {
+  if (!input.reinvestment.enabled) return;
+  for (const app of input.reinvestment.applications) {
+    if (!isValidAmount(app.value)) {
+      issues.invalid.push("O valor aplicado deve ser um número positivo de até 1 quatrilhão.");
+      return;
+    }
+  }
 }
 
 function checkSale(input: CaseInput, issues: Issues): void {
@@ -244,6 +266,7 @@ function checkInput(input: CaseInput): Issues {
   checkDates(input, issues);
   checkSale(input, issues);
   checkCost(input, issues);
+  checkApplications(input, issues);
   return {invalid: issues.invalid, missing: [...new Set(issues.missing)]};
 }
 
@@ -263,11 +286,10 @@ interface CostLine {
 
 // Items are entered for the whole property, so each line carries the holder's part of the cost.
 function costLines(input: CaseInput): CostLine[] {
-  const fraction = holderFraction(input);
   return filledItems(input).map((item) => ({
     id: item.id,
     date: item.date,
-    cost: correctedCost(item) * fraction,
+    cost: holderPart(input, correctedCost(item)),
     isLand: Boolean(item.isLand),
   }));
 }

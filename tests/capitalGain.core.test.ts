@@ -582,8 +582,8 @@ describe('scope', () => {
   });
 });
 
-describe('neutral values until the next tasks', () => {
-  it('returns neutral exemption, reinvestment, schedule and alerts', () => {
+describe('defaults until the next tasks', () => {
+  it('returns no exemption or reinvestment by default, and empty schedule and alerts', () => {
     const r = calculateCase(
       caso({acquisitionDate: '2015-03-10', contractDate: '2025-10-10', saleValue: 500000, brokerage: 1000}),
     );
