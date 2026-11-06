@@ -59,6 +59,9 @@ export interface ValueUpdate {
 // brokerage is what the holder paid and is never scaled.
 // Application.value and smallValue.sameNatureMonthTotal are the holder's part, as typed:
 // they are never scaled by the quota, unlike saleValue and cost items (whole property).
+// Installment.value and Installment.brokerage are also the holder's part, as typed. In saleMode
+// "prazo" the case brokerage is not used: brokerage comes from each installment.
+// PriorPart.gain is the taxable gain of that part, already after reductions, as typed.
 export interface CaseInput {
   taxpayerName: string;
   calendarYear: number;

@@ -3,10 +3,8 @@
 import {REINVESTMENT_DAYS, SINGLE_PROPERTY_LIMIT, SMALL_VALUE_LIMIT} from "../constants";
 import type {CaseInput, CaseResult, ExemptionCheck} from "../types";
 import {addDays, isValidDate} from "./dates";
-import {formatCurrency, round2} from "./format";
+import {money} from "./format";
 import {saleShare} from "./holder";
-
-const money = (value: number): string => formatCurrency(round2(value));
 
 // Small value (IN SRF 599/2005, art. 1): all or nothing. The total is the holder's part, as typed.
 // The month total includes this sale, so the larger of the two is compared to the limit.

@@ -1,0 +1,111 @@
+// Sale modes (spec 4.2, items 10 and 11): installment sale, payment schedule and sale in parts.
+// Pure functions, full precision.
+
+import {TAX_BRACKETS} from "../constants";
+import type {Alert, CaseInput, Installment, ScheduleLine} from "../types";
+import {lastBusinessDayOfNextMonth} from "./dates";
+import {money} from "./format";
+import {saleShare} from "./holder";
+import {progressiveTax} from "./taxTable";
+
+// Half a cent, not a legal value: a difference up to this is rounding, not a gap in the installments.
+export const INSTALLMENT_TOLERANCE = 0.005;
+
+export function installmentsTotal(input: CaseInput): number {
+  return input.installments.reduce((sum, installment) => sum + installment.value, 0);
+}
+
+export function installmentsBrokerage(input: CaseInput): number {
+  return input.installments.reduce((sum, installment) => sum + installment.brokerage, 0);
+}
+
+interface MonthTotal {
+  month: string;
+  received: number;
+  brokerage: number;
+}
+
+function totalsByMonth(installments: Installment[]): MonthTotal[] {
+  const months = new Map<string, MonthTotal>();
+  for (const {date, value, brokerage} of installments) {
+    const month = date.slice(0, 7);
+    const total = months.get(month) ?? {month, received: 0, brokerage: 0};
+    months.set(month, {month, received: total.received + value, brokerage: total.brokerage + brokerage});
+  }
+  return [...months.values()].sort((a, b) => (a.month < b.month ? -1 : 1));
+}
+
+// The tax of a month falls due on the last business day of the next month.
+function scheduleLine(month: string, received: number, gain: number, tax: number): ScheduleLine {
+  return {month, received, gain, tax, dueDate: lastBusinessDayOfNextMonth(`${month}-01`)};
+}
+
+// Gain of each month = total gain / sale value x amount received, less the brokerage paid that
+// month (IN SRF 84/2001, arts. 19, par. 4, and 31). Each month pays the share of the total tax
+// that its gain carries. With no gain both ratios are 0 and the lines stay, without tax.
+function installmentLines(input: CaseInput, totalGain: number, totalTax: number): ScheduleLine[] {
+  const share = saleShare(input);
+  const gainRatio = share > 0 ? totalGain / share : 0;
+  const taxRatio = totalGain > 0 ? totalTax / totalGain : 0;
+  return totalsByMonth(input.installments).map(({month, received, brokerage}) => {
+    const gain = gainRatio * (received - brokerage);
+    return scheduleLine(month, received, gain, gain * taxRatio);
+  });
+}
+
+// `totalTax` is what is left to pay. Outside "prazo" the whole sale is one line by the contract
+// date, and no tax means no line.
+export function buildSchedule(input: CaseInput, totalGainForRatio: number, totalTax: number): ScheduleLine[] {
+  if (input.saleMode === "prazo") return installmentLines(input, totalGainForRatio, totalTax);
+  if (totalTax <= 0) return [];
+  return [scheduleLine(input.contractDate.slice(0, 7), saleShare(input), totalGainForRatio, totalTax)];
+}
+
+// Sale in parts (spec 4.2, item 10): up to the end of the calendar year after the first operation,
+// gains are summed, the table applies to the total and the tax already paid comes off. Later, this
+// operation stands alone. Prior gains are taxable gains already after reductions, as typed.
+export function applyPriorParts(
+  input: CaseInput,
+  gain: number,
+): {totalGain: number; tax: number; priorTaxPaid: number; payable: number} {
+  // With no prior parts the minimum is Infinity and this sale is the first operation.
+  const firstYear = Math.min(...input.priorParts.map((part) => Number(part.date.slice(0, 4))));
+  const summed = Number(input.contractDate.slice(0, 4)) <= firstYear + 1 ? input.priorParts : [];
+
+  const totalGain = summed.reduce((sum, part) => sum + part.gain, gain);
+  const priorTaxPaid = summed.reduce((sum, part) => sum + part.taxPaid, 0);
+  const tax = progressiveTax(totalGain).total;
+  return {totalGain, tax, priorTaxPaid, payable: Math.max(0, tax - priorTaxPaid)};
+}
+
+// Prior parts count only in "partes": other modes may hold them from an earlier choice on screen.
+export function settleTax(input: CaseInput, gain: number): ReturnType<typeof applyPriorParts> {
+  return applyPriorParts(input.saleMode === "partes" ? input : {...input, priorParts: []}, gain);
+}
+
+// Alerts of this module. Task 6 merges them into its builder.
+export function saleModeAlerts(input: CaseInput, taxableGain: number): Alert[] {
+  if (input.saleMode !== "prazo") return [];
+  const alerts: Alert[] = [];
+
+  const share = saleShare(input);
+  const total = installmentsTotal(input);
+  if (share - total > INSTALLMENT_TOLERANCE) {
+    alerts.push({
+      id: "parcelas-diferenca",
+      level: "aviso",
+      text: `As parcelas informadas somam ${money(total)} e ficam ${money(share - total)} abaixo do valor de alienação do titular (${money(share)}). O cronograma mostra só o informado.`,
+    });
+  }
+
+  const firstLimit = TAX_BRACKETS[0].upTo;
+  if (taxableGain > firstLimit) {
+    alerts.push({
+      id: "prazo-progressiva",
+      level: "aberto",
+      text: `Venda a prazo com ganho acima de ${money(firstLimit)}: a alíquota por parcela é interpretação. O imposto total sai da tabela sobre o ganho total, e cada parcela paga a sua proporção.`,
+      legal: "Lei 8.981/1995, art. 21; IN SRF 84/2001, art. 31",
+    });
+  }
+  return alerts;
+}

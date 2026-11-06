@@ -583,14 +583,14 @@ describe('scope', () => {
 });
 
 describe('defaults until the next tasks', () => {
-  it('returns no exemption or reinvestment by default, and empty schedule and alerts', () => {
+  it('returns no exemption or reinvestment by default, empty alerts and one schedule line', () => {
     const r = calculateCase(
       caso({acquisitionDate: '2015-03-10', contractDate: '2025-10-10', saleValue: 500000, brokerage: 1000}),
     );
     expect(r.exemption.small.applies).toBe(false);
     expect(r.exemption.single.applies).toBe(false);
     expect(r.reinvestment).toEqual({deadline: null, applied: 0, proceeds: 499000, taxedShare: 1});
-    expect(r.schedule).toEqual([]);
+    expect(r.schedule).toHaveLength(1);
     expect(r.alerts).toEqual([]);
     expect(r.priorTaxPaid).toBe(0);
     expect(r.taxPayable).toBe(r.taxDue);

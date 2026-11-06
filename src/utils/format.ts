@@ -34,6 +34,9 @@ export function round2(value: number): number {
   return value < 0 && magnitude !== 0 ? -magnitude : magnitude;
 }
 
+// Amount for pt-BR text, in cents.
+export const money = (value: number): string => formatCurrency(round2(value));
+
 // Correction factors are shown with 6 decimals: 0.5059546 → "0,505955".
 export const formatFactor = (value: number): string =>
   new Intl.NumberFormat("pt-BR", {

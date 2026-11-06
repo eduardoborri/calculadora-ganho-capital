@@ -12,22 +12,34 @@ import {
   LAND_RULE_ART18_LIMIT,
   LAND_RULE_FACTOR_LIMIT,
   MIN_SALE_DATE,
-  TAX_BRACKETS,
 } from "../constants";
 import {costIndex} from "../data/custoAte1995";
 import type {
-  BracketLine,
   CaseInput,
   CaseResult,
   CaseStatus,
   CostItem,
   ExemptionCheck,
+  Installment,
   ItemReduction,
   OutOfScope,
+  PriorPart,
 } from "../types";
 import {isValidDate, monthsInclusive} from "./dates";
 import {checkSingleProperty, checkSmallValue, reinvestmentOutcome} from "./exemptions";
+import {money} from "./format";
 import {holderPart, saleShare} from "./holder";
+import {
+  buildSchedule,
+  INSTALLMENT_TOLERANCE,
+  installmentsBrokerage,
+  installmentsTotal,
+  saleModeAlerts,
+  settleTax,
+} from "./saleModes";
+import {progressiveTax} from "./taxTable";
+
+export {progressiveTax};
 
 export function defaultCaseInput(): CaseInput {
   return {
@@ -64,23 +76,7 @@ export function defaultCaseInput(): CaseInput {
   };
 }
 
-// ---- Tax table and reduction factors ----
-
-// Progressive table by bracket (Lei 8.981/1995, art. 21). Only brackets reached are listed.
-export function progressiveTax(base: number): {brackets: BracketLine[]; total: number} {
-  const brackets: BracketLine[] = [];
-  let total = 0;
-  let from = 0;
-  for (const {upTo, rate} of TAX_BRACKETS) {
-    if (base <= from) break;
-    const slice = Math.min(base, upTo) - from;
-    const tax = slice * rate;
-    brackets.push({from, to: upTo, rate, base: slice, tax});
-    total += tax;
-    from = upTo;
-  }
-  return {brackets, total};
-}
+// ---- Reduction factors ----
 
 export function factorFR1(m1: number): number {
   return 1 / (1 + FR1_RATE) ** m1;
@@ -261,20 +257,76 @@ function checkCost(input: CaseInput, issues: Issues): void {
   }
 }
 
+function checkInstallment(installment: Installment, input: CaseInput, issues: Issues): void {
+  const {date, value, brokerage} = installment;
+  checkDateField(date, "Data da parcela", issues);
+  if (isValidDate(input.contractDate) && isValidDate(date) && date < input.contractDate) {
+    issues.invalid.push(`A parcela de ${date} tem data anterior à alienação.`);
+  }
+  if (!isValidAmount(value)) {
+    issues.invalid.push("O valor da parcela deve ser um número positivo de até 1 quatrilhão.");
+  } else if (value === 0) {
+    issues.missing.push("Valor da parcela");
+  }
+  if (!isValidAmount(brokerage)) {
+    issues.invalid.push("A corretagem da parcela deve ser um número positivo de até 1 quatrilhão.");
+  } else if (isValidAmount(value) && brokerage > value) {
+    // A negative net amount would take gain and tax away from the other months.
+    issues.invalid.push("A corretagem da parcela não pode superar o valor da parcela.");
+  }
+}
+
+function checkInstallments(input: CaseInput, issues: Issues): void {
+  if (input.saleMode !== "prazo") return;
+  if (input.installments.length === 0) issues.missing.push("Parcelas");
+  input.installments.forEach((installment) => checkInstallment(installment, input, issues));
+
+  const share = saleShare(input);
+  const total = installmentsTotal(input);
+  if (share > 0 && total - share > INSTALLMENT_TOLERANCE) {
+    issues.invalid.push(
+      `As parcelas somam ${money(total)} e superam o valor de alienação do titular (${money(share)}).`,
+    );
+  }
+}
+
+function checkPriorPart(part: PriorPart, input: CaseInput, issues: Issues): void {
+  checkDateField(part.date, "Data da parte anterior", issues);
+  if (isValidDate(input.contractDate) && isValidDate(part.date) && part.date > input.contractDate) {
+    issues.invalid.push(`A parte anterior de ${part.date} tem data posterior à alienação.`);
+  }
+  if (!isValidAmount(part.gain) || !isValidAmount(part.taxPaid)) {
+    issues.invalid.push("O ganho e o imposto pago da parte anterior devem ser números positivos de até 1 quatrilhão.");
+  }
+}
+
+function checkPriorParts(input: CaseInput, issues: Issues): void {
+  if (input.saleMode !== "partes") return;
+  input.priorParts.forEach((part) => checkPriorPart(part, input, issues));
+}
+
 function checkInput(input: CaseInput): Issues {
   const issues: Issues = {invalid: [], missing: []};
   checkDates(input, issues);
   checkSale(input, issues);
   checkCost(input, issues);
   checkApplications(input, issues);
+  checkInstallments(input, issues);
+  checkPriorParts(input, issues);
   return {invalid: issues.invalid, missing: [...new Set(issues.missing)]};
 }
 
 // ---- Calculation steps ----
 
 // Brokerage paid by the seller comes off the sale value (IN SRF 84/2001, art. 19, par. 4).
+// In "prazo" it comes off each installment instead, so the sale stays gross here.
 function computeSaleNet(input: CaseInput): number {
-  return saleShare(input) - input.brokerage;
+  return input.saleMode === "prazo" ? saleShare(input) : saleShare(input) - input.brokerage;
+}
+
+// Art. 39 divides by the sale net of brokerage. In "prazo" that brokerage is in the installments.
+function computeProceeds(input: CaseInput, saleNet: number): number {
+  return input.saleMode === "prazo" ? saleNet - installmentsBrokerage(input) : saleNet;
 }
 
 interface CostLine {
@@ -389,12 +441,16 @@ export function calculateCase(input: CaseInput): CaseResult {
 
   // Exemptions are all or nothing and come before the table; reinvestment scales the gain.
   const exemption = {small: checkSmallValue(input), single: checkSingleProperty(input)};
-  const reinvestment = reinvestmentOutcome(input, saleNet);
+  const reinvestment = reinvestmentOutcome(input, computeProceeds(input, saleNet));
   const exempt = exemption.small.applies || exemption.single.applies;
   const taxableBase = exempt ? 0 : gainAfterReductions * reinvestment.taxedShare;
 
-  const {brackets, total: taxDue} = progressiveTax(taxableBase);
-  const priorTaxPaid = 0;
+  // In "partes" the table may run on a total larger than this sale's taxableBase.
+  const {totalGain, tax: taxDue, priorTaxPaid, payable} = settleTax(input, taxableBase);
+  const {brackets} = progressiveTax(totalGain);
+  const schedule = buildSchedule(input, taxableBase, payable);
+  // In "prazo" only what was typed is due, so the lines set the amount payable.
+  const taxPayable = input.saleMode === "prazo" ? schedule.reduce((sum, line) => sum + line.tax, 0) : payable;
 
   return {
     status: "ok",
@@ -410,8 +466,8 @@ export function calculateCase(input: CaseInput): CaseResult {
     brackets,
     taxDue,
     priorTaxPaid,
-    taxPayable: taxDue - priorTaxPaid,
-    schedule: [],
-    alerts: [],
+    taxPayable,
+    schedule,
+    alerts: saleModeAlerts(input, taxableBase),
   };
 }
