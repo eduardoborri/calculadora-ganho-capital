@@ -152,8 +152,12 @@ function isValidDate(date: string): boolean {
   return /^\d{4}-\d{2}-\d{2}$/.test(date) && addDays(date, 0) === date;
 }
 
+// Sanity ceiling, not a legal value: keeps products and sums finite, so overflow cannot
+// reach the result as NaN with status ok.
+const MAX_AMOUNT = 1e15;
+
 function isValidAmount(value: number): boolean {
-  return Number.isFinite(value) && value >= 0;
+  return Number.isFinite(value) && value >= 0 && value <= MAX_AMOUNT;
 }
 
 function checkScope(input: CaseInput): string[] {
@@ -190,7 +194,7 @@ function checkDates(input: CaseInput, issues: Issues): void {
 
 function checkSale(input: CaseInput, issues: Issues): void {
   if (!isValidAmount(input.saleValue)) {
-    issues.invalid.push("O valor de alienação deve ser um número positivo.");
+    issues.invalid.push("O valor de alienação deve ser um número positivo de até 1 quatrilhão.");
   } else if (input.saleValue === 0) {
     issues.missing.push("Valor de alienação");
   }
@@ -202,7 +206,7 @@ function checkSale(input: CaseInput, issues: Issues): void {
     }
   }
   if (!isValidAmount(input.brokerage)) {
-    issues.invalid.push("A corretagem deve ser um número positivo.");
+    issues.invalid.push("A corretagem deve ser um número positivo de até 1 quatrilhão.");
   } else if (saleShare(input) > 0 && input.brokerage > saleShare(input)) {
     issues.invalid.push("A corretagem não pode superar o valor de alienação.");
   }
@@ -214,8 +218,13 @@ function checkCostItem(item: CostItem, input: CaseInput, issues: Issues): void {
   if (isValidDate(input.contractDate) && isValidDate(item.date) && item.date > input.contractDate) {
     issues.invalid.push(`O item de custo "${name}" tem data posterior à alienação.`);
   }
+  // An earlier date would give the item larger reductions than the acquisition date allows.
+  // A property bought in stages takes the earliest date as acquisitionDate.
+  if (isValidDate(input.acquisitionDate) && isValidDate(item.date) && item.date < input.acquisitionDate) {
+    issues.invalid.push(`O item de custo "${name}" tem data anterior à aquisição.`);
+  }
   if (!isValidAmount(item.value) || (item.original && !isValidAmount(item.original.amount))) {
-    issues.invalid.push(`O item de custo "${name}" deve ter valor positivo.`);
+    issues.invalid.push(`O item de custo "${name}" deve ter valor positivo de até 1 quatrilhão.`);
   } else if (usesCostIndex(item) && itemIndex(item) === null) {
     issues.invalid.push(
       `O Anexo Único não traz índice em ${item.original.moeda} para o mês do item de custo "${name}".`,
@@ -243,10 +252,14 @@ function checkInput(input: CaseInput): Issues {
 
 // ---- Calculation steps ----
 
-// Holder's part of the sale: the quota in a condominium, the whole asset in marital
-// community (IN SRF 84/2001, arts. 19, IV, and 22).
+// Holder's fraction of the property: the quota in a condominium, the whole asset otherwise,
+// including marital community (IN SRF 84/2001, arts. 19, IV, and 22).
+function holderFraction(input: CaseInput): number {
+  return input.ownership === "condominio" ? input.quotaPct / 100 : 1;
+}
+
 function saleShare(input: CaseInput): number {
-  return input.ownership === "condominio" ? (input.saleValue * input.quotaPct) / 100 : input.saleValue;
+  return input.saleValue * holderFraction(input);
 }
 
 // Brokerage paid by the seller comes off the sale value (IN SRF 84/2001, art. 19, par. 4).
@@ -261,11 +274,13 @@ interface CostLine {
   isLand: boolean;
 }
 
+// Items are entered for the whole property, so each line carries the holder's part of the cost.
 function costLines(input: CaseInput): CostLine[] {
+  const fraction = holderFraction(input);
   return filledItems(input).map((item) => ({
     id: item.id,
     date: item.date,
-    cost: correctedCost(item),
+    cost: correctedCost(item) * fraction,
     isLand: Boolean(item.isLand),
   }));
 }
@@ -282,7 +297,9 @@ function landDate(input: CaseInput, lines: CostLine[]): string | null {
 }
 
 // Land rule (spec 4.2, item 6): construction started up to each limit takes the land date for
-// that reduction. Outside the rule, each item keeps its own date.
+// that reduction. Construction started after 1988 gets no art. 18 reduction: art. 18 applies
+// only to the land share (IN SRF 84/2001, art. 26, par. 3). Outside the rule, each item keeps
+// its own date.
 function reductionDates(line: CostLine, land: string | null): {art18Date: string; factorDate: string} {
   if (land === null || line.isLand) return {art18Date: line.date, factorDate: line.date};
   return {
@@ -291,7 +308,7 @@ function reductionDates(line: CostLine, land: string | null): {art18Date: string
   };
 }
 
-// Each reduction applies in sequence on the previous balance (IN RFB 599/2005, art. 3, pars. 2-5).
+// Each reduction applies in sequence on the previous balance (IN SRF 599/2005, art. 3, pars. 2-5).
 function reduceLine(
   line: CostLine,
   share: number,

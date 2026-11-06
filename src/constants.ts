@@ -20,13 +20,13 @@ export function ART18_REDUCTION(year: number): number {
 }
 
 // Monthly reduction factor FR1 = 1 / (1 + FR1_RATE)^m1.
-// Lei 11.196/2005, art. 40, and IN RFB 599/2005, art. 3; applies Jan/1996 to Nov/2005.
+// Lei 11.196/2005, art. 40, and IN SRF 599/2005, art. 3; applies Jan/1996 to Nov/2005.
 export const FR1_RATE = 0.006;
 export const FR1_START = "1996-01";
 export const FR1_END = "2005-11";
 
 // Monthly reduction factor FR2 = 1 / (1 + FR2_RATE)^m2.
-// Lei 11.196/2005, art. 40, and IN RFB 599/2005, art. 3; applies from Dec/2005 on.
+// Lei 11.196/2005, art. 40, and IN SRF 599/2005, art. 3; applies from Dec/2005 on.
 export const FR2_RATE = 0.0035;
 export const FR2_START = "2005-12";
 
@@ -35,15 +35,16 @@ export const FR2_START = "2005-12";
 export const COST_INDEX_END = "1995-12-31";
 
 // Land with construction started up to these dates: the land date governs the whole gain,
-// for art. 18 (IN SRF 84/2001, art. 26, par. 1) and for FR1/FR2 (IN RFB 599/2005, art. 3, par. 6).
+// for art. 18 (IN SRF 84/2001, art. 26, par. 1) and for FR1/FR2 (IN SRF 599/2005, art. 3, par. 6).
+// Construction started after the art. 18 limit: art. 18 only on the land share (art. 26, par. 3).
 export const LAND_RULE_ART18_LIMIT = "1988-12-31";
 export const LAND_RULE_FACTOR_LIMIT = "1995-12-31";
 
 // Earliest sale date handled: earlier sales follow other factors
-// (IN RFB 599/2005, art. 3, par. 1, I and II).
+// (IN SRF 599/2005, art. 3, par. 1, I and II).
 export const MIN_SALE_DATE = "2005-12-01";
 
-// Small-value exemption: sales up to R$ 35.000,00 in the month (IN RFB 599/2005, art. 1).
+// Small-value exemption: sales up to R$ 35.000,00 in the month (IN SRF 599/2005, art. 1).
 export const SMALL_VALUE_LIMIT = 35_000;
 
 // Single-property exemption: value up to R$ 440.000,00, no other sale in 5 years
@@ -51,7 +52,7 @@ export const SMALL_VALUE_LIMIT = 35_000;
 export const SINGLE_PROPERTY_LIMIT = 440_000;
 
 // Reinvestment exemption: proceeds applied within 180 days of the contract
-// (Lei 11.196/2005, art. 39; IN RFB 599/2005, art. 2). Day 180 counts, day 181 does not.
+// (Lei 11.196/2005, art. 39; IN SRF 599/2005, art. 2). Day 180 counts, day 181 does not.
 export const REINVESTMENT_DAYS = 180;
 // The exemption can be used once every 5 years (Lei 11.196/2005, art. 39, par. 2).
 export const REINVESTMENT_LOCK_YEARS = 5;

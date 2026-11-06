@@ -54,6 +54,9 @@ export interface ValueUpdate {
   exceptionCausaMortisOuPartilha: boolean;
 }
 
+// Amount convention: saleValue and costItems are entered for the whole property. Only with
+// ownership "condominio" both scale by quotaPct; "exclusivo" and "comunhao" ignore it.
+// brokerage is what the holder paid and is never scaled.
 export interface CaseInput {
   taxpayerName: string;
   calendarYear: number;

@@ -21,6 +21,20 @@ function item(id: string, date: string, value: number, extra: Partial<CostItem> 
   return {id, description: id, date, value, hasDocument: true, ...extra};
 }
 
+// Walks every number in a result. Only the open upper limit of the top bracket may be infinite.
+function expectFiniteNumbers(value: unknown, path = 'result'): void {
+  if (typeof value === 'number') {
+    expect(Number.isFinite(value), path).toBe(true);
+  } else if (Array.isArray(value)) {
+    value.forEach((entry, index) => expectFiniteNumbers(entry, `${path}[${index}]`));
+  } else if (value !== null && typeof value === 'object') {
+    for (const [key, entry] of Object.entries(value)) {
+      if (key === 'to' && entry === Infinity) continue;
+      expectFiniteNumbers(entry, `${path}.${key}`);
+    }
+  }
+}
+
 describe('official cases', () => {
   it('case 1: m1 = 0 and m2 = 195', () => {
     expect(formatFactor(factorFR2(195))).toBe('0,505955');
@@ -254,6 +268,20 @@ describe('land rule', () => {
     expect(obra.m1).toBeLessThan(119);
   });
 
+  it('construction on 1988-12-31 still takes the land date for art. 18', () => {
+    const [land, obra] = landCase('1988-12-31').items;
+    expect(land.art18Pct).toBe(0.2);
+    expect(obra.art18Pct).toBe(0.2);
+  });
+
+  it('construction on 1989-01-01 has no art. 18 reduction', () => {
+    const [land, obra] = landCase('1989-01-01').items;
+    expect(land.art18Pct).toBe(0.2);
+    expect(obra.art18Pct).toBe(0);
+    expect(obra.m1).toBe(land.m1);
+    expect(obra.m2).toBe(land.m2);
+  });
+
   it('without the option each item keeps its own date', () => {
     const r = calculateCase(
       caso({
@@ -297,6 +325,42 @@ describe('sale value', () => {
 
   it('brokerage comes off the sale value', () => {
     expect(calculateCase(caso({...base, brokerage: 60000})).saleNet).toBe(940000);
+  });
+
+  const withCost = {...base, brokerage: 10000, quotaPct: 50, costItems: [item('compra', '2015-03-10', 400000)]};
+
+  it('condominium scales sale and cost by the quota, not brokerage', () => {
+    const r = calculateCase(caso({...withCost, ownership: 'condominio'}));
+    expect(r.saleNet).toBe(490000);
+    expect(r.totalCost).toBe(200000);
+    expect(r.grossGain).toBe(290000);
+    expect(r.items[0].share).toBe(1);
+  });
+
+  it('condominium keeps the split between items', () => {
+    const r = calculateCase(
+      caso({
+        ...base,
+        ownership: 'condominio',
+        quotaPct: 50,
+        costItems: [item('compra', '2015-03-10', 300000), item('reforma', '2018-03-10', 100000)],
+      }),
+    );
+    expect(r.totalCost).toBe(200000);
+    expect(r.items.map((line) => line.share)).toEqual([0.75, 0.25]);
+  });
+
+  it('exclusive and marital community ignore the quota on sale and cost', () => {
+    for (const ownership of ['exclusivo', 'comunhao'] as const) {
+      const r = calculateCase(caso({...withCost, ownership}));
+      expect(r.saleNet).toBe(990000);
+      expect(r.totalCost).toBe(400000);
+      expect(r.grossGain).toBe(590000);
+    }
+  });
+
+  it('correctedCost stays unscaled', () => {
+    expect(correctedCost(item('compra', '2015-03-10', 400000))).toBe(400000);
   });
 });
 
@@ -347,12 +411,40 @@ describe('correctedCost', () => {
   });
 });
 
+describe('numeric fields of the result', () => {
+  const ready = {acquisitionDate: '2015-03-10', contractDate: '2025-10-10', saleValue: 500000};
+  const inputs: Partial<CaseInput>[] = [
+    {},
+    {acquisitionDate: '2015-03-10'},
+    {contractDate: '2025-10-10'},
+    {saleValue: 500000},
+    {acquisitionDate: '2015-03-10', contractDate: '2025-10-10'},
+    {...ready, costItems: [item('a', '', 0)]},
+    {...ready, costItems: [item('a', '2015-03-10', Infinity)]},
+    {...ready, ownership: 'condominio', quotaPct: 0},
+    {...ready, ownership: 'condominio', quotaPct: NaN},
+    {...ready, saleValue: NaN},
+    {...ready, saleValue: 1e308, ownership: 'condominio', quotaPct: 50},
+    {...ready, landRule: true},
+    ready,
+    {...ready, saleValue: 1e15},
+  ];
+
+  it('are finite for partial, invalid and complete inputs', () => {
+    for (const partial of inputs) expectFiniteNumbers(calculateCase(caso(partial)));
+  });
+
+  it('the walk reaches nested numbers and rejects NaN', () => {
+    expect(() => expectFiniteNumbers({items: [{gain: NaN}]})).toThrow();
+    expect(() => expectFiniteNumbers({to: NaN})).toThrow();
+  });
+});
+
 describe('incomplete input', () => {
-  it('default input is incomplete, with no NaN', () => {
+  it('default input is incomplete', () => {
     const r = calculateCase(defaultCaseInput());
     expect(r.status).toBe('incompleto');
     expect(r.missing).toEqual(['Data de aquisição', 'Data de alienação', 'Valor de alienação']);
-    expect(JSON.stringify(r)).not.toContain('NaN');
     for (const value of [r.saleNet, r.totalCost, r.grossGain, r.taxableBase, r.taxDue, r.taxPayable]) {
       expect(value).toBe(0);
     }
@@ -413,6 +505,36 @@ describe('invalid input', () => {
   it('a cost item on the sale date is accepted', () => {
     const r = calculateCase(caso({...ready, costItems: [item('reforma', '2025-10-10', 1000)]}));
     expect(r.status).toBe('ok');
+  });
+
+  it('cost item before the acquisition date', () => {
+    const r = calculateCase(caso({...ready, costItems: [item('transferencia', '2010-01-10', 1000)]}));
+    expect(r.status).toBe('invalido');
+    expect(r.missing).toEqual(['O item de custo "transferencia" tem data anterior à aquisição.']);
+    expect(r.items).toEqual([]);
+  });
+
+  it('property bought in stages is valid when acquisitionDate is the earliest date', () => {
+    const r = calculateCase(
+      caso({
+        ...ready,
+        costItems: [item('entrada', '2015-03-10', 1000), item('saldo', '2016-05-10', 2000)],
+      }),
+    );
+    expect(r.status).toBe('ok');
+    expect(r.totalCost).toBe(3000);
+  });
+
+  it('amounts above 1e15 are invalid', () => {
+    expect(calculateCase(caso({...ready, saleValue: 1e15})).status).toBe('ok');
+    expect(calculateCase(caso({...ready, saleValue: 1e16})).status).toBe('invalido');
+    expect(
+      calculateCase(caso({...ready, saleValue: 1e308, ownership: 'condominio', quotaPct: 50})).status,
+    ).toBe('invalido');
+    expect(calculateCase(caso({...ready, brokerage: 1e16})).status).toBe('invalido');
+    expect(calculateCase(caso({...ready, costItems: [item('a', '2015-03-10', 1e16)]})).status).toBe('invalido');
+    const original = item('a', '2015-03-10', 1000, {original: {amount: 1e16, moeda: 'Reais'}});
+    expect(calculateCase(caso({...ready, costItems: [original]})).status).toBe('invalido');
   });
 
   it('impossible date', () => {
