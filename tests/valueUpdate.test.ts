@@ -44,8 +44,8 @@ function levelOf(r: CaseResult, id: string): string | undefined {
 // 50 completed months after the update of lei().
 const case15 = {acquisitionDate: '2010-03-15', contractDate: '2029-02-10', saleValue: 2000000};
 const rearpBase = {acquisitionDate: '1985-06-10', saleValue: 1500000};
-const lastLockDay = '2031-01-14';
-const firstFreeDay = '2031-01-15';
+const lastLockDay = '2031-01-15';
+const firstFreeDay = '2031-01-16';
 
 describe('law14973Percent', () => {
   it('case 15: 50 months is 16%', () => {
@@ -120,11 +120,28 @@ describe('Lei 14.973 through calculateCase', () => {
     expect(ids(r)).not.toContain('lei14973-rateio');
   });
 
-  it('the quota applies to CAA and DTA as to any cost', () => {
+  it('the quota scales the sale but not CAA and DTA, which are the holder own values', () => {
     const r = calculateCase(caso({...case15, ownership: 'condominio', quotaPct: 50, update: lei()}));
     expect(r.saleNet).toBe(1000000);
-    expect(r.totalCost).toBeCloseTo(330000, 6);
-    expect(r.grossGain).toBeCloseTo(670000, 6);
+    expect(r.totalCost).toBeCloseTo(660000, 6);
+    expect(r.grossGain).toBeCloseTo(340000, 6);
+  });
+
+  it('a CAA of zero is accepted, and at 0% the gain stays at the original date', () => {
+    const r = calculateCase(caso({...case15, contractDate: '2027-12-10', update: lei({caa: 0})}));
+    expect(r.status).toBe('ok');
+    expect(r.totalCost).toBe(0);
+    expect(r.grossGain).toBe(2000000);
+    expect(r.items).toHaveLength(1);
+    expect(r.items[0].share).toBe(1);
+    expect(r.items[0].m2).toBe(214);
+  });
+
+  it('a CAA of zero above 0% leaves the whole gain on the DTA line', () => {
+    const r = calculateCase(caso({...case15, update: lei({caa: 0})}));
+    expect(r.totalCost).toBeCloseTo(160000, 6);
+    expect(r.items[1].share).toBe(1);
+    expect(r.items[0].reducedGain).toBe(0);
   });
 
   it('art. 18 stays on the CAA share only, through the dates', () => {
@@ -182,10 +199,10 @@ describe('Rearp after the lock', () => {
 
   it('an option date after the deadline gets a warning', () => {
     const update = rearp({date: '2026-02-20'});
-    const r = calculateCase(caso({...rearpBase, contractDate: '2031-02-20', update}));
+    const r = calculateCase(caso({...rearpBase, contractDate: '2031-02-21', update}));
     expect(levelOf(r, 'rearp-apos-prazo')).toBe('aviso');
     const onTime = rearp({date: '2026-02-19'});
-    expect(ids(calculateCase(caso({...rearpBase, contractDate: '2031-02-20', update: onTime})))).not.toContain(
+    expect(ids(calculateCase(caso({...rearpBase, contractDate: '2031-02-21', update: onTime})))).not.toContain(
       'rearp-apos-prazo',
     );
   });
@@ -219,9 +236,10 @@ describe('Rearp within the lock', () => {
     expect(r.schedule).toEqual([]);
   });
 
-  it('the quota does not scale the tax paid', () => {
+  it('the quota scales neither the CAA nor the tax paid', () => {
     const r = calculateCase(caso({...within, ownership: 'condominio', quotaPct: 50, update: rearp()}));
-    expect(r.totalCost).toBe(150000);
+    expect(r.saleNet).toBe(750000);
+    expect(r.totalCost).toBe(300000);
     expect(r.priorTaxPaid).toBe(10000);
   });
 
@@ -241,6 +259,23 @@ describe('Rearp within the lock', () => {
     expect(r.priorTaxPaid).toBe(10000);
     expect(r.taxPayable).toBeCloseTo(r.taxDue - 10000, 6);
     expect(r.schedule[0].tax).toBeCloseTo((r.taxDue - 10000) / 2, 6);
+  });
+
+  it('installment brokerage does not shrink the deduction', () => {
+    const installments = [
+      {id: 'a', date: lastLockDay, value: 750000, brokerage: 15000},
+      {id: 'b', date: '2031-03-14', value: 750000, brokerage: 15000},
+    ];
+    const r = calculateCase(caso({...within, saleMode: 'prazo', installments, update: rearp()}));
+    expect(r.taxPayable).toBeCloseTo(r.taxDue * 0.98 - 10000, 6);
+  });
+
+  it('a deduction above the tax leaves the installment lines at zero', () => {
+    const installments = [{id: 'a', date: lastLockDay, value: 1500000, brokerage: 15000}];
+    const update = rearp({taxPaidSelic: 999999});
+    const r = calculateCase(caso({...within, saleMode: 'prazo', installments, update}));
+    expect(r.schedule[0].tax).toBe(0);
+    expect(r.taxPayable).toBe(0);
   });
 
   it('with prior parts it adds to the tax they paid', () => {
@@ -279,7 +314,7 @@ describe('Rearp within the lock', () => {
     expect(ids(r)).not.toContain('rearp-reversao');
   });
 
-  it('the lock ends on the same day and month, 5 years later', () => {
+  it('the 5th anniversary is still inside the lock, and the next day is not', () => {
     const run = (contractDate: string) => calculateCase(caso({...rearpBase, contractDate, update: rearp()}));
     expect(ids(run(lastLockDay))).toContain('rearp-reversao');
     expect(ids(run(firstFreeDay))).not.toContain('rearp-reversao');
@@ -322,8 +357,8 @@ describe('validation of the update', () => {
     const cases: [Partial<ValueUpdate>, string][] = [
       [{date: ''}, 'Data da atualização'],
       [{originalAcquisitionDate: ''}, 'Data de aquisição original'],
-      [{caa: 0}, 'CAA'],
       [{dta: 0}, 'DTA'],
+      [{caa: 0, dta: 0}, 'DTA'],
     ];
     for (const [partial, label] of cases) {
       const r = run(partial);

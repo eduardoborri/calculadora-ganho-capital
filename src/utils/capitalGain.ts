@@ -265,17 +265,14 @@ function checkUpdateDates(update: ValueUpdate, input: CaseInput, issues: Issues)
   }
 }
 
-function checkUpdateAmount(value: number, label: string, issues: Issues): void {
-  if (!isValidAmount(value)) issues.invalid.push(`${label} deve ser um número positivo de até 1 quatrilhão.`);
-  else if (value === 0) issues.missing.push(label);
-}
-
 function checkUpdate(input: CaseInput, issues: Issues): void {
   const {update} = input;
   if (!update) return;
   checkUpdateDates(update, input, issues);
-  checkUpdateAmount(update.caa, "CAA", issues);
-  checkUpdateAmount(update.dta, "DTA", issues);
+  // A CAA of zero is a real declared cost, as long as the DTA is there.
+  if (!isValidAmount(update.caa)) issues.invalid.push("CAA deve ser um número positivo de até 1 quatrilhão.");
+  if (!isValidAmount(update.dta)) issues.invalid.push("DTA deve ser um número positivo de até 1 quatrilhão.");
+  else if (update.dta === 0) issues.missing.push("DTA");
 
   const label = "Imposto pago corrigido pela Selic";
   const datesKnown = isValidDate(update.date) && isValidDate(input.contractDate);
@@ -370,11 +367,12 @@ interface CostLine {
 }
 
 // Items are entered for the whole property, so each line carries the holder's part of the cost.
+// The lines of an update are already the holder's own declared values.
 function costLines(input: CaseInput): CostLine[] {
   return filledItems(input).map((item) => ({
     id: item.id,
     date: item.date,
-    cost: holderPart(input, correctedCost(item)),
+    cost: input.update ? correctedCost(item) : holderPart(input, correctedCost(item)),
     isLand: Boolean(item.isLand),
   }));
 }
@@ -483,12 +481,12 @@ export function calculateCase(input: CaseInput): CaseResult {
   const taxableBase = exempt ? 0 : gainAfterReductions * reinvestment.taxedShare;
 
   // In "partes" the table may run on a total larger than this sale's taxableBase.
-  const {totalGain, tax: taxDue, priorTaxPaid: partsTaxPaid} = settleTax(input, taxableBase);
+  const {totalGain, tax: taxDue, priorTaxPaid: partsTaxPaid, payable: owed} = settleTax(input, taxableBase);
   const {brackets} = progressiveTax(totalGain);
   // The Rearp deduction counts in every sale mode, also with prior parts out of the window.
   const priorTaxPaid = partsTaxPaid + updated.deductFromTax;
-  const payable = Math.max(0, taxDue - priorTaxPaid);
-  const schedule = buildSchedule(input, taxableBase, payable);
+  const payable = Math.max(0, owed - updated.deductFromTax);
+  const schedule = buildSchedule(input, taxableBase, owed, updated.deductFromTax);
   // In "prazo" only what was typed is due, so the lines set the amount payable.
   const taxPayable = input.saleMode === "prazo" ? schedule.reduce((sum, line) => sum + line.tax, 0) : payable;
 

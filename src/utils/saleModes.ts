@@ -40,25 +40,57 @@ function scheduleLine(month: string, received: number, gain: number, tax: number
   return {month, received, gain, tax, dueDate: lastBusinessDayOfNextMonth(`${month}-01`)};
 }
 
+// Takes from each tax its part of the deduction, never below zero. What a line cannot absorb moves
+// to the next lines and then back to the earlier ones, so no deduction is lost while tax remains.
+function deductFromLines(taxes: number[], parts: number[]): number[] {
+  let left = 0;
+  const net = taxes.map((tax, index) => {
+    const wanted = parts[index] + left;
+    const taken = Math.min(tax, wanted);
+    left = wanted - taken;
+    return tax - taken;
+  });
+  for (let index = net.length - 1; index >= 0; index -= 1) {
+    const taken = Math.min(net[index], left);
+    net[index] -= taken;
+    left -= taken;
+  }
+  return net;
+}
+
 // Gain of each month = total gain / sale value x amount received, less the brokerage paid that
 // month (IN SRF 84/2001, arts. 19, par. 4, and 31). Each month pays the share of the total tax
 // that its gain carries. With no gain both ratios are 0 and the lines stay, without tax.
-function installmentLines(input: CaseInput, totalGain: number, totalTax: number): ScheduleLine[] {
+// The deduction follows the amount received, not the gain, so brokerage does not shrink it: with
+// all installments typed the lines add up to tax x (1 - brokerage / sale value) - deduction.
+function installmentLines(
+  input: CaseInput,
+  totalGain: number,
+  totalTax: number,
+  deduction: number,
+): ScheduleLine[] {
   const share = saleShare(input);
   const gainRatio = share > 0 ? totalGain / share : 0;
   const taxRatio = totalGain > 0 ? totalTax / totalGain : 0;
-  return totalsByMonth(input.installments).map(({month, received, brokerage}) => {
-    const gain = gainRatio * (received - brokerage);
-    return scheduleLine(month, received, gain, gain * taxRatio);
-  });
+  const months = totalsByMonth(input.installments);
+  const gains = months.map(({received, brokerage}) => gainRatio * (received - brokerage));
+  const parts = months.map(({received}) => (share > 0 ? (deduction * received) / share : 0));
+  const taxes = deductFromLines(gains.map((gain) => gain * taxRatio), parts);
+  return months.map(({month, received}, index) => scheduleLine(month, received, gains[index], taxes[index]));
 }
 
-// `totalTax` is what is left to pay. Outside "prazo" the whole sale is one line by the contract
-// date, and no tax means no line.
-export function buildSchedule(input: CaseInput, totalGainForRatio: number, totalTax: number): ScheduleLine[] {
-  if (input.saleMode === "prazo") return installmentLines(input, totalGainForRatio, totalTax);
-  if (totalTax <= 0) return [];
-  return [scheduleLine(input.contractDate.slice(0, 7), saleShare(input), totalGainForRatio, totalTax)];
+// `totalTax` comes before `deduction` (Rearp reversal). Outside "prazo" the whole sale is one line
+// by the contract date, and no tax means no line.
+export function buildSchedule(
+  input: CaseInput,
+  totalGainForRatio: number,
+  totalTax: number,
+  deduction = 0,
+): ScheduleLine[] {
+  if (input.saleMode === "prazo") return installmentLines(input, totalGainForRatio, totalTax, deduction);
+  const payable = Math.max(0, totalTax - deduction);
+  if (payable <= 0) return [];
+  return [scheduleLine(input.contractDate.slice(0, 7), saleShare(input), totalGainForRatio, payable)];
 }
 
 // Prior parts inside the window of the sale in parts. With no prior parts the minimum is Infinity

@@ -11,9 +11,10 @@ export function law14973Percent(months: number): number {
   return LAW14973_PERCENT_TABLE.find((row) => months <= row.upToMonths).percent;
 }
 
-// Lock of the Rearp: same day and month, 5 years later, is already out of it.
+// A term in years expires on the day of equal number, which is still inside it
+// (Codigo Civil, art. 132, par. 3).
 function isWithinRearpLock(update: ValueUpdate, contractDate: string): boolean {
-  return update.law === "rearp" && contractDate < addYears(update.date, REARP_LOCK_YEARS);
+  return update.law === "rearp" && contractDate <= addYears(update.date, REARP_LOCK_YEARS);
 }
 
 // A migrated case follows the Rearp in full, so the lock also applies to it.
@@ -56,7 +57,7 @@ export function applyValueUpdate(input: CaseInput): {
       costItems: law14973Lines(update, percent),
       gainOverride: null,
       deductFromTax: 0,
-      alerts: [...law14973Alerts(months, percent), ...updateInputAlerts(input)],
+      alerts: [...law14973Alerts(months, percent), ...updateInputAlerts(input, false)],
     };
   }
 
@@ -66,6 +67,6 @@ export function applyValueUpdate(input: CaseInput): {
     costItems: rearpLines(update, reversal),
     gainOverride: null,
     deductFromTax: reversal ? update.taxPaidSelic : 0,
-    alerts: [...rearpAlerts(input, withinLock, reversal), ...updateInputAlerts(input)],
+    alerts: [...rearpAlerts(input, withinLock, reversal), ...updateInputAlerts(input, reversal)],
   };
 }

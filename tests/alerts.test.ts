@@ -3,7 +3,7 @@ import {DARF_CODE, TRANSFER_AT_MARKET_RATE} from '../src/constants';
 import {buildAlerts} from '../src/utils/alerts';
 import {calculateCase, defaultCaseInput} from '../src/utils/capitalGain';
 import {formatCurrency, formatPercent} from '../src/utils/format';
-import type {Alert, Application, CaseInput, CaseResult, CostItem} from '../src/types';
+import type {Alert, Application, CaseInput, CaseResult, CostItem, ValueUpdate} from '../src/types';
 
 function caso(partial: Partial<CaseInput>): CaseInput {
   return {...defaultCaseInput(), ...base, ...partial};
@@ -19,6 +19,20 @@ function reinv(partial: Partial<CaseInput['reinvestment']> = {}): CaseInput['rei
 
 function app(kind: Application['kind']): Application {
   return {id: 'a', date: '2025-11-10', value: 100000, kind};
+}
+
+function upd(partial: Partial<ValueUpdate> = {}): ValueUpdate {
+  return {
+    law: '14973',
+    date: '2024-12-10',
+    caa: 500000,
+    dta: 1000000,
+    originalAcquisitionDate: '2015-03-10',
+    migratedFrom14973: false,
+    taxPaidSelic: 0,
+    exceptionCausaMortisOuPartilha: false,
+    ...partial,
+  };
 }
 
 function run(partial: Partial<CaseInput>): CaseResult {
@@ -83,7 +97,7 @@ describe('reinvestment', () => {
 
   it('each flag gives its warning, with its citation', () => {
     const cases: [Partial<CaseInput['reinvestment']>, string, string][] = [
-      [{usedInLast5Years: true}, 'reinvestimento-uso-5-anos', 'art. 39, § 2º'],
+      [{usedInLast5Years: true}, 'reinvestimento-uso-5-anos', 'art. 39, § 5º'],
       [{landOrGarage: true}, 'reinvestimento-terreno-garagem', '§ 11, II e III'],
       [{applications: [app('quitacao')]}, 'reinvestimento-quitacao', 'Cosit 14/2025'],
       [{moreThanOneSale: true}, 'reinvestimento-mais-de-uma-venda', '§ 6º'],
@@ -151,8 +165,39 @@ describe('cost', () => {
       item('indexado', '1995-07-10', 0, {original: {amount: 1000, moeda: 'Reais'}}),
     ];
     for (const entry of quiet) {
-      expect(ids(run({...old, costItems: [entry]}))).not.toContain('custo-1995-confirmar');
+      const r = run({...old, costItems: [entry]});
+      expect(r.status).toBe('ok');
+      expect(ids(r)).not.toContain('custo-1995-confirmar');
     }
+  });
+
+  describe('CAA line dated up to 1995', () => {
+    const old = {acquisitionDate: '1995-12-31', costItems: []};
+    const original = {originalAcquisitionDate: '1995-12-31'};
+
+    it('Lei 14.973 asks to confirm the value', () => {
+      const r = run({...old, update: upd(original)});
+      expect(r.status).toBe('ok');
+      expect(find(r, 'custo-1995-confirmar')?.level).toBe('aviso');
+    });
+
+    it('a Rearp reversal asks as well', () => {
+      const update = upd({...original, law: 'rearp', date: '2025-06-10', taxPaidSelic: 1000});
+      expect(ids(run({...old, update}))).toContain('custo-1995-confirmar');
+    });
+
+    it('a Rearp that stands has its cost at the option date, and says nothing', () => {
+      const update = upd({...original, law: 'rearp', date: '2019-06-10'});
+      const r = run({...old, update});
+      expect(r.status).toBe('ok');
+      expect(ids(r)).not.toContain('custo-1995-confirmar');
+    });
+
+    it('a CAA of 1996 or of zero says nothing', () => {
+      const later = upd({originalAcquisitionDate: '1996-01-01'});
+      expect(ids(run({acquisitionDate: '1996-01-01', update: later}))).not.toContain('custo-1995-confirmar');
+      expect(ids(run({...old, update: upd({...original, caa: 0})}))).not.toContain('custo-1995-confirmar');
+    });
   });
 
   it('inheritance at market value gives the rate and the Darf', () => {
@@ -161,7 +206,12 @@ describe('cost', () => {
     expect(alert?.level).toBe('aviso');
     expect(alert?.text).toContain(formatPercent(TRANSFER_AT_MARKET_RATE));
     expect(alert?.text).toContain('Darf');
-    expect(alert?.legal).toContain('Lei 9.532/1997, art. 23, § 1º');
+    expect(alert?.legal).toContain('Lei 9.532/1997, art. 23, §§ 1º e 5º');
+  });
+
+  it('dissolution at market value gets the same alert', () => {
+    const r = run({acquisitionForm: 'dissolucao', transferAtMarket: true});
+    expect(find(r, 'transferencia-mercado')?.level).toBe('aviso');
   });
 
   it('a flag left on a purchase says nothing', () => {
@@ -231,6 +281,28 @@ describe('sale modes', () => {
   });
 });
 
+describe('value update', () => {
+  it('a sale in parts warns about the amounts of the part and a repeated deduction', () => {
+    const alert = find(run({saleMode: 'partes', update: upd()}), 'atualizacao-partes');
+    expect(alert?.level).toBe('aviso');
+    expect(alert?.text).toContain('parte vendida');
+    expect(alert?.text).toContain('parte anterior');
+    expect(ids(run({update: upd()}))).not.toContain('atualizacao-partes');
+  });
+
+  it('tax paid outside a reversal is reported as not used', () => {
+    const r = run({update: upd({taxPaidSelic: 1000})});
+    expect(find(r, 'atualizacao-selic-nao-usado')?.level).toBe('info');
+    expect(r.priorTaxPaid).toBe(0);
+    expect(ids(run({update: upd()}))).not.toContain('atualizacao-selic-nao-usado');
+  });
+
+  it('tax paid in a reversal is used and raises no such note', () => {
+    const update = upd({law: 'rearp', date: '2025-06-10', taxPaidSelic: 1000});
+    expect(ids(run({update}))).not.toContain('atualizacao-selic-nao-usado');
+  });
+});
+
 describe('open points', () => {
   it('m2 after Dec/2005 gets the seal, and Dec/2005 itself does not', () => {
     const at = (date: string) => run({acquisitionDate: date, costItems: [item('compra', date, 300000)]});
@@ -285,6 +357,52 @@ describe('every alert', () => {
     expect(crowded.alerts.length).toBeGreaterThan(10);
     for (const alert of crowded.alerts) expect(alert.legal.trim()).not.toBe('');
     expect(new Set(ids(crowded)).size).toBe(crowded.alerts.length);
+  });
+
+  it('has a citation and a unique id in the cases with an update', () => {
+    const reversal = run({
+      contractDate: '2026-03-10',
+      landRule: true,
+      saleMode: 'partes',
+      update: upd({
+        law: 'rearp',
+        date: '2026-02-20',
+        originalAcquisitionDate: '1994-05-10',
+        migratedFrom14973: true,
+        taxPaidSelic: 1000,
+      }),
+    });
+    const law14973 = run({contractDate: '2029-02-10', update: upd({taxPaidSelic: 1000})});
+    const exception = run({update: upd({law: 'rearp', date: '2025-06-10', exceptionCausaMortisOuPartilha: true})});
+    const migrated = run({
+      contractDate: '2031-06-10',
+      update: upd({law: 'rearp', date: '2025-06-10', migratedFrom14973: true}),
+    });
+
+    const all = [reversal, law14973, exception, migrated];
+    for (const r of all) {
+      expect(r.status).toBe('ok');
+      for (const alert of r.alerts) expect(alert.legal.trim()).not.toBe('');
+      expect(new Set(ids(r)).size).toBe(r.alerts.length);
+    }
+    const seen = all.flatMap(ids);
+    for (const id of [
+      'rearp-reversao',
+      'rearp-apos-prazo',
+      'rearp-excecao',
+      'rearp-data',
+      'rearp-migracao',
+      'lei14973-percentual',
+      'lei14973-rateio',
+      'atualizacao-itens-ignorados',
+      'atualizacao-regra-terreno',
+      'atualizacao-data-divergente',
+      'atualizacao-partes',
+      'atualizacao-selic-nao-usado',
+      'custo-1995-confirmar',
+    ]) {
+      expect(seen).toContain(id);
+    }
   });
 
   it('a blocked case has none', () => {

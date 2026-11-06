@@ -43,8 +43,8 @@ export interface Application {
   kind: "aquisicao" | "quitacao";
 }
 
-// caa and dta are entered for the whole property and scale by the quota, like cost items.
-// taxPaidSelic is the holder's own tax, as typed, and is never scaled.
+// caa, dta and taxPaidSelic are the holder's own values, as declared: the declaration and the Deap
+// are per taxpayer, so they never scale by the quota, unlike cost items.
 export interface ValueUpdate {
   law: "14973" | "rearp";
   date: string;

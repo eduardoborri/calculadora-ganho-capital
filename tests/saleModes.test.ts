@@ -122,6 +122,56 @@ describe('schedule of an installment sale', () => {
   });
 });
 
+describe('deduction in the schedule of an installment sale', () => {
+  const sale = {...prazo, saleValue: 1500000};
+  const lineTaxes = (installments: Installment[], deduction: number) =>
+    buildSchedule(caso({...sale, installments}), 164000, 24600, deduction).map((line) => line.tax);
+  const sum = (values: number[]) => values.reduce((total, value) => total + value, 0);
+
+  it('follows the amount received: 24,600 x 0.98 - 10,000 is 14,108', () => {
+    const taxes = lineTaxes(
+      [parcela('a', '2025-10-15', 750000, 15000), parcela('b', '2025-11-15', 750000, 15000)],
+      10000,
+    );
+    expect(taxes[0]).toBeCloseTo(7054, 6);
+    expect(taxes[1]).toBeCloseTo(7054, 6);
+    expect(sum(taxes)).toBeCloseTo(14108, 6);
+  });
+
+  it('what a line cannot absorb moves to a later line', () => {
+    const taxes = lineTaxes(
+      [parcela('a', '2025-10-15', 750000, 749000), parcela('b', '2025-11-15', 750000)],
+      10000,
+    );
+    expect(taxes[0]).toBe(0);
+    expect(sum(taxes)).toBeCloseTo(24600 * (1 - 749000 / 1500000) - 10000, 6);
+  });
+
+  it('what the last line cannot absorb moves back to an earlier line', () => {
+    const taxes = lineTaxes(
+      [parcela('a', '2025-10-15', 750000), parcela('b', '2025-11-15', 750000, 749000)],
+      10000,
+    );
+    expect(taxes[1]).toBe(0);
+    expect(sum(taxes)).toBeCloseTo(24600 * (1 - 749000 / 1500000) - 10000, 6);
+  });
+
+  it('a deduction above the tax leaves every line at zero', () => {
+    const taxes = lineTaxes([parcela('a', '2025-10-15', 750000), parcela('b', '2025-11-15', 750000)], 99999);
+    expect(taxes).toEqual([0, 0]);
+  });
+
+  it('with part of the installments typed only their share comes off', () => {
+    const taxes = lineTaxes([parcela('a', '2025-10-15', 750000)], 10000);
+    expect(taxes[0]).toBeCloseTo(12300 - 5000, 6);
+  });
+
+  it('outside prazo it comes off the single line', () => {
+    expect(buildSchedule(caso(base), 400000, 60000, 10000)[0].tax).toBe(50000);
+    expect(buildSchedule(caso(base), 400000, 60000, 60000)).toEqual([]);
+  });
+});
+
 describe('schedule outside an installment sale', () => {
   it('a cash sale is one line by the contract date', () => {
     const lines = buildSchedule(caso({...base, brokerage: 5000}), 400000, 60000);

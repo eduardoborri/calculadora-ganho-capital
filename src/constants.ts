@@ -52,14 +52,15 @@ export const SMALL_VALUE_LIMIT = 35_000;
 export const SINGLE_PROPERTY_LIMIT = 440_000;
 export const SINGLE_PROPERTY_LOCK_YEARS = 5;
 
-// Fixed rate on a transfer at market value by inheritance, legacy or advance donation, due by the
-// estate or the donor and not calculated here (Lei 9.532/1997, art. 23, par. 1).
+// Fixed rate on a transfer at market value by inheritance, legacy, advance donation or dissolution
+// of the marriage, due by whoever transferred and not calculated here
+// (Lei 9.532/1997, art. 23, pars. 1 and 5).
 export const TRANSFER_AT_MARKET_RATE = 0.15;
 
 // Reinvestment exemption: proceeds applied within 180 days of the contract
 // (Lei 11.196/2005, art. 39; IN SRF 599/2005, art. 2). Day 180 counts, day 181 does not.
 export const REINVESTMENT_DAYS = 180;
-// The exemption can be used once every 5 years (Lei 11.196/2005, art. 39, par. 2).
+// The exemption can be used once every 5 years (Lei 11.196/2005, art. 39, par. 5).
 export const REINVESTMENT_LOCK_YEARS = 5;
 
 // Lei 14.973/2024 (IN RFB 2.222/2024, art. 12): percentage of the update amount (DTA) taxed,

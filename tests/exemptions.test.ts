@@ -79,8 +79,8 @@ describe('single property exemption', () => {
         }),
       );
 
-    it('a part less than 5 years before the contract blocks it and explains', () => {
-      const out = check('2020-10-11');
+    it('a part on the 5th anniversary of the contract blocks it and explains', () => {
+      const out = check('2020-10-10');
       expect(out.applies).toBe(false);
       expect(out.reasons).toHaveLength(1);
       expect(out.reasons[0]).toContain('parte anterior');
@@ -90,8 +90,8 @@ describe('single property exemption', () => {
       expect(check('2025-10-10').applies).toBe(false);
     });
 
-    it('a part exactly 5 years before the contract does not block it', () => {
-      expect(check('2020-10-10')).toEqual({applies: true, reasons: []});
+    it('a part one day further back does not block it', () => {
+      expect(check('2020-10-09')).toEqual({applies: true, reasons: []});
     });
 
     it('parts left on the input of another mode do not count', () => {

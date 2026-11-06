@@ -46,11 +46,11 @@ function rearpReversalAlert(input: CaseInput, update: ValueUpdate): Alert {
     ? " Caso migrado da Lei 14.973: a lei não diz expressamente como o prazo se aplica à migração, e isso deve ser confirmado."
     : "";
   const prazo =
-    input.saleMode === "prazo" ? " Na venda a prazo, a dedução foi distribuída na proporção das parcelas." : "";
+    input.saleMode === "prazo" ? " Na venda a prazo, a dedução foi distribuída na proporção do valor recebido em cada mês." : "";
   return {
     id: "rearp-reversao",
     level: "risco",
-    text: `Alienação em menos de ${REARP_LOCK_YEARS} anos da adesão ao Rearp: voltam o custo e a data originais, e o imposto pago corrigido pela Selic (${money(update.taxPaidSelic)}) é deduzido do imposto, sem ficar abaixo de zero. Eventual excedente não é tratado nesta apuração.${prazo}${migrated}`,
+    text: `Alienação em até ${REARP_LOCK_YEARS} anos da adesão ao Rearp: voltam o custo e a data originais, e o imposto pago corrigido pela Selic (${money(update.taxPaidSelic)}) é deduzido do imposto, sem ficar abaixo de zero. Eventual excedente não é tratado nesta apuração.${prazo}${migrated}`,
     legal: update.migratedFrom14973
       ? "Lei 15.265/2025, arts. 7º e 8º; IN RFB 2.302/2025, art. 17"
       : "Lei 15.265/2025, art. 7º",
@@ -81,7 +81,7 @@ export function rearpAlerts(input: CaseInput, withinLock: boolean, reversal: boo
     alerts.push({
       id: "rearp-excecao",
       level: "info",
-      text: `Alienação em menos de ${REARP_LOCK_YEARS} anos da adesão, com a exceção de causa mortis ou partilha marcada: a atualização não foi desfeita.`,
+      text: `Alienação em até ${REARP_LOCK_YEARS} anos da adesão, com a exceção de causa mortis ou partilha marcada: a atualização não foi desfeita.`,
       legal: "Lei 15.265/2025, art. 7º",
     });
   }
@@ -96,8 +96,22 @@ export function rearpAlerts(input: CaseInput, withinLock: boolean, reversal: boo
   return alerts;
 }
 
+// The CAA line exists under Lei 14.973 and in a reversal. Otherwise the cost sits at the option date.
+function updateCost1995Alerts(update: ValueUpdate, reversal: boolean): Alert[] {
+  const caaInCost = update.law === "14973" || reversal;
+  if (!caaInCost || update.caa === 0 || update.originalAcquisitionDate > COST_INDEX_END) return [];
+  return [
+    {
+      id: "custo-1995-confirmar",
+      level: "aviso",
+      text: `CAA com data até ${formatDate(COST_INDEX_END)}: confirme que o valor já está em reais de ${formatDate(COST_INDEX_END)}.`,
+      legal: "IN SRF 84/2001, art. 7º",
+    },
+  ];
+}
+
 // What the update overrides on the input, so nothing typed is dropped in silence.
-export function updateInputAlerts(input: CaseInput): Alert[] {
+export function updateInputAlerts(input: CaseInput, reversal: boolean): Alert[] {
   const {update} = input;
   const legal = update.law === "14973" ? "IN RFB 2.222/2024, art. 12" : "IN RFB 2.302/2025, art. 7º, § 2º";
   const alerts: Alert[] = [];
@@ -125,7 +139,23 @@ export function updateInputAlerts(input: CaseInput): Alert[] {
       legal,
     });
   }
-  return alerts;
+  if (input.saleMode === "partes") {
+    alerts.push({
+      id: "atualizacao-partes",
+      level: "aviso",
+      text: "Alienação em partes com atualização de valor: CAA e DTA devem ser os valores da parte vendida, e o imposto pago corrigido pela Selic não pode repetir dedução feita em parte anterior.",
+      legal,
+    });
+  }
+  if (update.taxPaidSelic > 0 && !reversal) {
+    alerts.push({
+      id: "atualizacao-selic-nao-usado",
+      level: "info",
+      text: `O imposto pago corrigido pela Selic (${money(update.taxPaidSelic)}) não foi usado: ele só entra quando o Rearp é desfeito.`,
+      legal: "Lei 15.265/2025, art. 7º",
+    });
+  }
+  return [...alerts, ...updateCost1995Alerts(update, reversal)];
 }
 
 // ---- Sale ----
@@ -149,7 +179,7 @@ function projectiveAlerts(input: CaseInput, today: string): Alert[] {
       id: "operacao-futura",
       level: "info",
       text: "Operação com data futura: esta apuração tem caráter projetivo e usa a tabela e as regras vigentes hoje.",
-      legal: "Lei 8.981/1995, art. 21",
+      legal: "Lei 7.713/1988, art. 3º, § 2º",
     },
   ];
 }
@@ -222,7 +252,7 @@ function reinvestmentBarAlerts(input: CaseInput): Alert[] {
       id: "reinvestimento-uso-5-anos",
       level: "aviso",
       text: `Art. 39: informado uso da isenção nos últimos ${REINVESTMENT_LOCK_YEARS} anos. A isenção não foi considerada no cálculo.`,
-      legal: "Lei 11.196/2005, art. 39, § 2º",
+      legal: "Lei 11.196/2005, art. 39, § 5º",
     });
   }
   if (landOrGarage) {
@@ -305,14 +335,13 @@ function costAlerts(input: CaseInput): Alert[] {
 }
 
 function transferAlerts(input: CaseInput): Alert[] {
-  const succession = ["heranca", "legado", "doacao_adiantamento"].includes(input.acquisitionForm);
-  if (!succession || !input.transferAtMarket) return [];
+  if (input.acquisitionForm === "compra" || !input.transferAtMarket) return [];
   return [
     {
       id: "transferencia-mercado",
       level: "aviso",
-      text: `Transferência a valor de mercado: a ferramenta não calcula o imposto da transferência (${formatPercent(TRANSFER_AT_MARKET_RATE)} fixos), que cabe ao espólio ou ao doador. O Darf desse imposto comprova o custo.`,
-      legal: "Lei 9.532/1997, art. 23, § 1º; IN SRF 84/2001, art. 20, § 6º, III",
+      text: `Transferência a valor de mercado: a ferramenta não calcula o imposto da transferência (${formatPercent(TRANSFER_AT_MARKET_RATE)} fixos), que cabe a quem transferiu o bem (espólio, doador ou cônjuge). O Darf desse imposto comprova o custo.`,
+      legal: "Lei 9.532/1997, art. 23, §§ 1º e 5º; IN SRF 84/2001, art. 20, § 6º, III",
     },
   ];
 }

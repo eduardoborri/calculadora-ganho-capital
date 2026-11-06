@@ -32,12 +32,13 @@ export function checkSmallValue(input: CaseInput): ExemptionCheck {
   return {applies: reasons.length === 0, reasons};
 }
 
-// An earlier part of this sale is another sale in the period. Prior parts count only in "partes":
-// other modes may hold them from an earlier choice on screen.
+// An earlier part of this sale is another sale in the period, and the 5th anniversary is still in
+// it (Codigo Civil, art. 132, par. 3). Prior parts count only in "partes": other modes may hold
+// them from an earlier choice on screen.
 function hasRecentPriorPart(input: CaseInput): boolean {
   if (input.saleMode !== "partes" || !isValidDate(input.contractDate)) return false;
   return input.priorParts.some(
-    (part) => isValidDate(part.date) && input.contractDate < addYears(part.date, SINGLE_PROPERTY_LOCK_YEARS),
+    (part) => isValidDate(part.date) && input.contractDate <= addYears(part.date, SINGLE_PROPERTY_LOCK_YEARS),
   );
 }
 
