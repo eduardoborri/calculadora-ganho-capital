@@ -64,7 +64,7 @@ npm run dev
 - Comando de build: `npm run build`
 - Diretório de saída: `dist`
 - Versão do Node: variável de ambiente `NODE_VERSION=22` (a mesma do `.nvmrc`; o `package.json` exige Node 20.19 ou mais novo).
-- Lockfile: o repositório ainda não tem `package-lock.json`, porque o ambiente de desenvolvimento não roda `npm`. As dependências usam faixas (`^`), e uma nova instalação pode trazer versões mais novas do que as testadas. Antes da primeira publicação, gere o `package-lock.json` no StackBlitz (`npm install` no terminal), baixe-o e faça o commit dele, para que a Cloudflare instale exatamente as versões conferidas.
+- Lockfile: as dependências diretas estão fixadas nas versões testadas no StackBlitz em 09/11/2026; ainda é recomendado fazer o commit do `package-lock.json` gerado no StackBlitz (`npm install` no terminal) para fixar também as dependências transitivas, de modo que a Cloudflare instale exatamente as versões conferidas.
 - Segredos (Settings > Variables and Secrets): `SITE_USER` e `SITE_PASSWORD`. O usuário não diferencia maiúsculas de minúsculas; sem `SITE_USER`, qualquer usuário é aceito.
 - Sem `SITE_PASSWORD` o site responde 503 e fica fechado: a configuração é obrigatória.
 - O acesso é protegido por `functions/_middleware.js` (autenticação básica) para toda a equipe.
