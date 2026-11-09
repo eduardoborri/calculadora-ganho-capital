@@ -403,25 +403,35 @@ function permutaBrokerage(input: CaseInput): number {
 function permutaAlerts(input: CaseInput, partial: CaseResult): Alert[] {
   if (!isPermuta(input) || !partial.permuta) return [];
   const alerts: Alert[] = [];
-  if (saleShare(input) === 0) {
+  const brokerage = permutaBrokerage(input);
+  const withoutTorna = saleShare(input) === 0;
+  if (withoutTorna) {
+    const note =
+      brokerage > 0
+        ? ` A corretagem informada (${money(brokerage)}) não foi deduzida: sem torna, não há valor do qual deduzi-la.`
+        : "";
     alerts.push({
       id: "permuta-sem-torna",
       level: "info",
-      text: "Permuta sem torna: não há ganho de capital a apurar nem imposto devido.",
+      text: `Permuta sem torna: não há ganho de capital a apurar nem imposto devido, em qualquer modalidade.${note}`,
       legal: "RIR/2018, art. 132, II",
     });
   }
   alerts.push({
     id: "permuta-custo-recebido",
     level: "info",
-    text: `Custo do imóvel recebido para a declaração, na parte do titular: ${money(partial.permuta.receivedCost)} (custo do imóvel dado menos a torna, mais o ganho apurado sobre a torna antes das reduções).`,
+    text: `Custo do imóvel recebido para a declaração, na parte do titular: ${money(partial.permuta.receivedCost)} (custo do imóvel dado menos a torna, mais o ganho da torna pela fórmula do Perguntão, antes da corretagem e das reduções).`,
     legal: "RIR/2018, art. 128, § 4º, II; Perguntão IRPF 2026, pergunta 632",
   });
-  if (permutaBrokerage(input) > 0) {
+  if (!withoutTorna && brokerage > 0) {
+    const floored =
+      partial.grossGain <= 0
+        ? " A corretagem supera o ganho apurado sobre a torna: o ganho fica em zero e não há imposto."
+        : "";
     alerts.push({
       id: "permuta-corretagem",
       level: "aberto",
-      text: "Permuta com corretagem: a corretagem foi deduzida da torna, como na venda, e a proporção da torna foi calculada sobre a torna bruta. O Perguntão não traz exemplo com corretagem, e o custo do imóvel recebido usa o ganho já líquido dela.",
+      text: `Permuta com corretagem: a corretagem foi deduzida da torna e reduz o ganho tributável sobre ela; a proporção usa a torna bruta. O custo do imóvel recebido segue a fórmula do Perguntão, sem a corretagem. O Perguntão não traz exemplo com corretagem: ponto em aberto.${floored}`,
       legal: "IN SRF 84/2001, art. 19, § 4º; Perguntão IRPF 2026, pergunta 632",
     });
   }

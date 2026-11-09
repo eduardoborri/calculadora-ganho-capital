@@ -61,8 +61,10 @@ export interface ValueUpdate {
 // PriorPart.gain is the taxable gain of that part, already after reductions, as typed.
 // With `update` present, costItems and landRule are ignored: the update sets the cost lines.
 // Operation "permuta" (permuta com torna): saleValue is ignored and the torna takes its place as
-// the amount received. permuta.torna and permuta.receivedValue are for the whole operation, so in
-// a condominium they scale by quotaPct like saleValue. Installments, in "prazo", are the torna's.
+// the amount received. permuta.torna is the torna RECEIVED by this taxpayer (a torna paid is not
+// a gain and does not go here); permuta.receivedValue is the value of the property received.
+// Both are for the whole operation, so in a condominium they scale by quotaPct like saleValue.
+// Installments, in "prazo", are the torna's. Torna 0 is a permuta sem torna: no gain.
 export interface CaseInput {
   taxpayerName: string;
   calendarYear: number;

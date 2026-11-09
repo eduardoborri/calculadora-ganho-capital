@@ -227,14 +227,12 @@ function checkSaleValue(input: CaseInput, issues: Issues): void {
   }
 }
 
-// In a permuta the brokerage comes off the torna, so it can never exceed it, even when the torna
-// is zero (IN SRF 84/2001, art. 19, par. 4).
+// In a permuta the brokerage may exceed the torna: the gain then floors at zero (alert
+// permuta-corretagem).
 function checkBrokerage(input: CaseInput, issues: Issues): void {
   const share = saleShare(input);
   if (!isValidAmount(input.brokerage)) {
     issues.invalid.push("A corretagem deve ser um número positivo de até 1 quatrilhão.");
-  } else if (isPermuta(input) && input.brokerage > share) {
-    issues.invalid.push("A corretagem não pode superar a torna do titular.");
   } else if (!isPermuta(input) && share > 0 && input.brokerage > share) {
     issues.invalid.push("A corretagem não pode superar o valor de alienação.");
   }
@@ -338,10 +336,9 @@ function checkInstallments(input: CaseInput, issues: Issues): void {
   if (input.installments.length === 0) issues.missing.push("Parcelas");
   input.installments.forEach((installment) => checkInstallment(installment, input, issues));
 
-  // A permuta without torna has nothing to receive in installments, so any installment exceeds it.
   const share = saleShare(input);
   const total = installmentsTotal(input);
-  if ((share > 0 || isPermuta(input)) && total - share > INSTALLMENT_TOLERANCE) {
+  if (share > 0 && total - share > INSTALLMENT_TOLERANCE) {
     issues.invalid.push(`As parcelas somam ${money(total)} e superam ${receivedLabel(input)} (${money(share)}).`);
   }
 }
@@ -381,6 +378,7 @@ function checkInput(input: CaseInput): Issues {
 // Brokerage paid by the seller comes off the sale value (IN SRF 84/2001, art. 19, par. 4).
 // In "prazo" it comes off each installment instead, so the sale stays gross here.
 function computeSaleNet(input: CaseInput): number {
+  if (isPermutaWithoutTorna(input)) return 0;
   return input.saleMode === "prazo" ? saleShare(input) : saleShare(input) - input.brokerage;
 }
 
@@ -423,8 +421,10 @@ function scaleLines(lines: CostLine[], factor: number): CostLine[] {
   return factor === 1 ? lines : lines.map((line) => ({...line, cost: line.cost * factor}));
 }
 
-// Cost of the property received = cost of the property given - (torna - gain)
-// (RIR/2018, art. 128, par. 4, II; Perguntao IRPF 2026, 632).
+// Cost of the property received = cost of the property given - (torna - gain), with the gain of
+// the Perguntao formula, factor x torna, before brokerage: the same in every sale mode
+// (RIR/2018, art. 128, par. 4, II; Perguntao IRPF 2026, 632). tornaGain is the gain of this case,
+// net of brokerage and floored at zero.
 function permutaOutcome(
   input: CaseInput,
   factor: number,
@@ -432,8 +432,21 @@ function permutaOutcome(
   grossGain: number,
 ): CaseResult["permuta"] {
   if (!isPermuta(input)) return null;
-  const tornaGain = Math.max(0, grossGain);
-  return {proportion: factor, tornaGain, receivedCost: holderTotalCost - (saleShare(input) - tornaGain)};
+  const torna = saleShare(input);
+  return {proportion: factor, tornaGain: grossGain, receivedCost: holderTotalCost - (torna - factor * torna)};
+}
+
+function isPermutaWithoutTorna(input: CaseInput): boolean {
+  return isPermuta(input) && saleShare(input) === 0;
+}
+
+// Permuta sem torna has no gain (RIR/2018, art. 132, II), whatever the sale mode: it runs as a
+// sale in cash, so no installment or prior part is needed or taxed. The brokerage paid is kept
+// only for the alert; computeSaleNet does not deduct it.
+function calculationInput(input: CaseInput): CaseInput {
+  if (!isPermutaWithoutTorna(input)) return input;
+  const paid = input.saleMode === "prazo" ? installmentsBrokerage(input) : input.brokerage;
+  return {...input, saleMode: "vista", brokerage: paid};
 }
 
 // Zero total cost: a single virtual item takes the whole gain at the acquisition date.
@@ -514,7 +527,8 @@ function blockedResult(status: CaseStatus, missing: string[]): CaseResult {
   };
 }
 
-export function calculateCase(input: CaseInput): CaseResult {
+export function calculateCase(typed: CaseInput): CaseResult {
+  const input = calculationInput(typed);
   const scopeReasons = checkScope(input);
   if (scopeReasons.length > 0) return blockedResult("fora_de_escopo", scopeReasons);
 
@@ -533,7 +547,9 @@ export function calculateCase(input: CaseInput): CaseResult {
   const factor = permutaFactor(input, holderTotalCost);
   const lines = scaleLines(holderLines, factor);
   const totalCost = lines.reduce((sum, line) => sum + line.cost, 0);
-  const grossGain = saleNet - totalCost;
+  // A permuta gain is never negative without brokerage, so a loss here comes from brokerage
+  // above the torna's gain: it floors at zero.
+  const grossGain = isPermuta(input) ? Math.max(0, saleNet - totalCost) : saleNet - totalCost;
 
   const items = reduceGain(costInput, lines, totalCost, grossGain);
   const gainAfterReductions = items.reduce((sum, item) => sum + item.reducedGain, 0);

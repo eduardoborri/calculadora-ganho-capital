@@ -127,6 +127,14 @@ function normalizeUpdate(v: unknown): ValueUpdate | null {
   };
 }
 
+// Before permuta was calculated, it was marked out of scope with "permuta_torna". Such an old entry
+// reopens as a permuta, incomplete until torna and received value are typed, never as a sale.
+function normalizeOperation(raw: Record<string, unknown>): Operation {
+  const legacyPermuta = Array.isArray(raw.outOfScope) && raw.outOfScope.includes("permuta_torna");
+  if (raw.operation === undefined && legacyPermuta) return "permuta";
+  return oneOf(raw.operation, OPERATIONS, "venda");
+}
+
 // Rebuild a stored (possibly old or corrupted) input field by field over the defaults, so
 // calculateCase never meets a missing field, a wrong type or a bad list element.
 function normalizeInput(raw: Record<string, unknown>): CaseInput {
@@ -148,7 +156,7 @@ function normalizeInput(raw: Record<string, unknown>): CaseInput {
     landRule: bool(raw.landRule, d.landRule),
     costItems: objects(raw.costItems).map(normalizeCostItem),
     contractDate: str(raw.contractDate, d.contractDate),
-    operation: oneOf(raw.operation, OPERATIONS, d.operation),
+    operation: normalizeOperation(raw),
     saleValue: num(raw.saleValue, d.saleValue),
     permuta: {
       torna: num(pe.torna, d.permuta.torna),

@@ -209,9 +209,45 @@ describe('permuta sem torna', () => {
     expect(alert?.legal).toBe('RIR/2018, art. 132, II');
   });
 
-  it('sem torna, corretagem é inválida (não há de onde deduzi-la)', () => {
-    const r = calculateCase(caso({...oficial, permuta: {torna: 0, receivedValue: 60000}, brokerage: 100}));
-    expect(r.status).toBe('invalido');
+  const semTorna = {...oficial, permuta: {torna: 0, receivedValue: 60000}};
+
+  it('com corretagem: ok, sem imposto, corretagem não deduzida', () => {
+    const r = calculateCase(caso({...semTorna, brokerage: 100}));
+    expect(r.status).toBe('ok');
+    expect(r.saleNet).toBe(0);
+    expect(r.grossGain).toBe(0);
+    expect(r.taxPayable).toBe(0);
+    expect(r.permuta.receivedCost).toBe(60000);
+    const text = find(r, 'permuta-sem-torna')?.text ?? '';
+    expect(text).toContain('100,00');
+    expect(text).toContain('não foi deduzida');
+    expect(find(r, 'permuta-corretagem')).toBeUndefined();
+  });
+
+  it('a prazo sem parcelas: ok, como à vista', () => {
+    const r = calculateCase(caso({...semTorna, saleMode: 'prazo', installments: []}));
+    expect(r.status).toBe('ok');
+    expect(r.taxPayable).toBe(0);
+    expect(r.schedule).toEqual([]);
+  });
+
+  it('a prazo com parcelas e corretagem: ok, sem imposto, alerta cita a corretagem', () => {
+    const r = calculateCase(
+      caso({...semTorna, saleMode: 'prazo', installments: [parcela('a', '2025-05-20', 5000, 200)]}),
+    );
+    expect(r.status).toBe('ok');
+    expect(r.taxPayable).toBe(0);
+    expect(r.schedule).toEqual([]);
+    expect(find(r, 'permuta-sem-torna')?.text).toContain('200,00');
+  });
+
+  it('em partes com parte anterior tributável: ok, sem imposto', () => {
+    const r = calculateCase(
+      caso({...semTorna, saleMode: 'partes', priorParts: [{id: 'p', date: '2025-01-10', gain: 100000, taxPaid: 0}]}),
+    );
+    expect(r.status).toBe('ok');
+    expect(r.taxDue).toBe(0);
+    expect(r.taxPayable).toBe(0);
   });
 });
 
@@ -241,13 +277,41 @@ describe('permuta com corretagem', () => {
     expect(r.permuta.proportion).toBeCloseTo(10000 / 70000, 9);
     expect(round2(r.grossGain)).toBe(928.57);
     expect(r.reinvestment.proceeds).toBe(9500);
-    expect(find(r, 'permuta-corretagem')?.level).toBe('aberto');
+    expect(round2(r.permuta.receivedCost)).toBe(51428.57);
+    const alert = find(r, 'permuta-corretagem');
+    expect(alert?.level).toBe('aberto');
+    expect(alert?.text).not.toContain('o ganho fica em zero');
   });
 
-  it('corretagem acima da torna é inválida', () => {
-    const r = calculateCase(caso({...oficial, brokerage: 10001}));
-    expect(r.status).toBe('invalido');
-    expect(r.missing).toContain('A corretagem não pode superar a torna do titular.');
+  it('o custo do imóvel recebido é o mesmo à vista e a prazo', () => {
+    const vista = calculateCase(caso({...oficial, brokerage: 500}));
+    const prazo = calculateCase(
+      caso({
+        ...oficial,
+        saleMode: 'prazo',
+        installments: [parcela('a', '2025-05-20', 4000, 200), parcela('b', '2025-08-20', 6000, 300)],
+      }),
+    );
+    expect(prazo.status).toBe('ok');
+    expect(prazo.permuta.receivedCost).toBe(vista.permuta.receivedCost);
+    expect(round2(prazo.permuta.receivedCost)).toBe(51428.57);
+    expect(find(prazo, 'permuta-corretagem')?.level).toBe('aberto');
+  });
+
+  it.each([
+    ['acima do ganho da torna', 2000],
+    ['acima da torna', 10001],
+  ])('corretagem %s: ganho zero, sem imposto, com alerta', (_nome, brokerage) => {
+    const r = calculateCase(caso({...oficial, brokerage}));
+    expect(r.status).toBe('ok');
+    expect(r.saleNet).toBe(10000 - brokerage);
+    expect(r.grossGain).toBe(0);
+    expect(r.items).toEqual([]);
+    expect(r.taxableBase).toBe(0);
+    expect(r.taxPayable).toBe(0);
+    expect(r.permuta.tornaGain).toBe(0);
+    expect(round2(r.permuta.receivedCost)).toBe(51428.57);
+    expect(find(r, 'permuta-corretagem')?.text).toContain('o ganho fica em zero');
   });
 });
 
@@ -261,14 +325,40 @@ describe('permuta no histórico', () => {
     expect(entry.input.permuta).toEqual({torna: 12345, receivedValue: 67890});
   });
 
-  it('entrada antiga: operação venda e "permuta_torna" descartado do fora de escopo', () => {
+  it('entrada antiga: "permuta_torna" sai do fora de escopo e a operação vira permuta', () => {
     const raw = JSON.stringify([
       {id: 'old', savedAt: '2026-01-01T00:00:00.000Z', input: {saleValue: 1, outOfScope: ['permuta_torna', 'exterior']}},
     ]);
     const [entry] = loadHistory(fakeStorage({[HISTORY_KEY]: raw}));
     expect(entry.input.outOfScope).toEqual(['exterior']);
-    expect(entry.input.operation).toBe('venda');
+    expect(entry.input.operation).toBe('permuta');
     expect(entry.input.permuta).toEqual({torna: 0, receivedValue: 0});
+  });
+
+  it('entrada antiga com "permuta_torna" e sem operação volta como permuta incompleta, nunca como venda', () => {
+    const old = {
+      saleValue: 500000,
+      acquisitionDate: '2015-01-10',
+      contractDate: '2025-05-05',
+      costItems: [{id: 'c', description: 'Compra', date: '2015-01-10', value: 300000, hasDocument: true}],
+      outOfScope: ['permuta_torna'],
+    };
+    const raw = JSON.stringify([{id: 'old', savedAt: '2026-01-01T00:00:00.000Z', input: old}]);
+    const [entry] = loadHistory(fakeStorage({[HISTORY_KEY]: raw}));
+    expect(entry.input.operation).toBe('permuta');
+    expect(entry.input.outOfScope).toEqual([]);
+    const r = calculateCase(entry.input);
+    expect(r.status).not.toBe('ok');
+    expect(r.status).toBe('incompleto');
+    expect(r.missing).toContain('Valor do imóvel recebido');
+    // The same input as a sale would be ok and taxed: the legacy flag must not lead there.
+    expect(calculateCase({...entry.input, operation: 'venda'}).status).toBe('ok');
+  });
+
+  it('operação gravada prevalece sobre "permuta_torna" antigo', () => {
+    const raw = JSON.stringify([{id: 'x', input: {operation: 'venda', outOfScope: ['permuta_torna']}}]);
+    const [entry] = loadHistory(fakeStorage({[HISTORY_KEY]: raw}));
+    expect(entry.input.operation).toBe('venda');
   });
 
   it('valores corrompidos voltam aos padrões', () => {
