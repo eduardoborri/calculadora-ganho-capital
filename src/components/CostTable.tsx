@@ -39,7 +39,7 @@ function CostRow({ item, landRule, onReplace, onRemove }: CostRowProps) {
             />
           </div>
         </td>
-        <td data-label="Data" className={`table-cell bg-yellow-50 ${stackCellYellow}`}>
+        <td data-label="Data" className={`table-cell bg-field ${stackCellYellow}`}>
           <input
             type="date"
             value={item.date}
@@ -48,7 +48,7 @@ function CostRow({ item, landRule, onReplace, onRemove }: CostRowProps) {
             className={cellInput}
           />
         </td>
-        <td data-label="Valor (R$)" className={`table-cell bg-yellow-50 ${stackCellYellow}`}>
+        <td data-label="Valor (R$)" className={`table-cell bg-field ${stackCellYellow}`}>
           <ValueCell item={item} onReplace={onReplace} />
         </td>
         {landRule && (
@@ -76,7 +76,7 @@ function CostRow({ item, landRule, onReplace, onRemove }: CostRowProps) {
             type="button"
             onClick={onRemove}
             aria-label={`Excluir item ${item.description || "de custo"}`}
-            className="p-1 text-gray-500 hover:text-accent rounded-md transition-colors cursor-pointer"
+            className="p-1 text-text-gray hover:text-accent-ink rounded-md transition-colors cursor-pointer"
           >
             <Trash2 className="w-4 h-4" />
           </button>
@@ -99,7 +99,7 @@ export default function CostTable({ input, onChange }: BlockProps) {
   return (
     <BlockCard title="Custo de aquisição">
       {input.update && (
-        <p className="text-sm text-ink border-l-[3px] border-secondary pl-3">
+        <p className="notice notice-ok leading-relaxed block">
           Com atualização de valor, o custo vem de CAA e DTA (bloco Atualização de valor): os itens abaixo não entram no cálculo.
         </p>
       )}

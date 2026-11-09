@@ -51,7 +51,7 @@ export default function ScheduleTable({ schedule, saleMode }: ScheduleTableProps
                   </td>
                   <td
                     data-label="Imposto"
-                    className={`table-cell text-right font-semibold ${stackCell} max-sm:order-5 max-sm:col-span-2 ${line.tax > 0 ? "text-accent" : "text-primary"}`}
+                    className={`table-cell text-right font-semibold ${stackCell} max-sm:order-5 max-sm:col-span-2 ${line.tax > 0 ? "text-accent-ink" : "text-primary"}`}
                   >
                     {money(line.tax)}
                   </td>

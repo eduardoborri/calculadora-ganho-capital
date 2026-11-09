@@ -190,18 +190,20 @@ export default function Calculator() {
   const pdfBlockedReason = result.status === "ok" ? null : PDF_BLOCKED_REASON[result.status];
 
   return (
-    <div className="max-w-[1240px] mx-auto px-4 md:px-8 py-8 max-sm:py-6 space-y-8 min-w-0">
-      <header className="flex flex-col lg:flex-row lg:items-end justify-between gap-6 min-w-0">
+    <div className="max-w-[1240px] mx-auto px-4 md:px-8 py-8 max-sm:py-5 space-y-8 min-w-0">
+      <header className="flex flex-col lg:flex-row lg:items-end justify-between gap-6 min-w-0 pb-6 border-b border-rule">
         <div className="min-w-0">
           <img
             src={`${import.meta.env.BASE_URL}brand/gsga-logo.png`}
             alt="Gaia Silva Gaede Advogados"
             width={640}
             height={130}
-            className="h-9 w-auto mb-5"
+            className="h-8 w-auto mb-6 max-sm:mb-4"
           />
-          <h1 className="text-[32px] max-sm:text-[26px] leading-tight font-semibold text-primary">Calculadora de Ganho de Capital</h1>
-          <p className="text-text-gray mt-1">GSGA-PR, alienação de imóvel por pessoa física residente</p>
+          <h1 className="text-[28px] max-sm:text-[24px] leading-tight font-semibold tracking-[-0.01em] text-primary">
+            Calculadora de Ganho de Capital
+          </h1>
+          <p className="text-text-gray mt-1.5 text-[15px]">Alienação de imóvel por pessoa física residente no Brasil · GSGA-PR</p>
         </div>
         {started && (
           <div className="flex flex-wrap items-center gap-3 max-sm:grid max-sm:grid-cols-2 min-w-0">
@@ -247,11 +249,9 @@ export default function Calculator() {
       {notice && (
         <div
           role="status"
-          className={`bg-white border border-rule border-l-[3px] rounded px-4 py-2.5 text-sm flex items-start gap-3 ${
-            notice.kind === "error" ? "border-l-accent" : "border-l-secondary"
-          }`}
+          className={`notice ${notice.kind === "error" ? "notice-error" : "notice-ok"}`}
         >
-          <p className={`flex-1 min-w-0 [overflow-wrap:anywhere] ${notice.kind === "error" ? "text-accent" : "text-ink"}`}>{notice.text}</p>
+          <p className="flex-1 min-w-0 [overflow-wrap:anywhere]">{notice.text}</p>
           <button type="button" onClick={() => setNotice(null)} aria-label="Fechar aviso" className="text-text-gray hover:text-ink cursor-pointer">
             <X className="w-4 h-4" />
           </button>
@@ -261,11 +261,9 @@ export default function Calculator() {
       {started && pdfStatus.state !== "idle" && (
         <div
           role="status"
-          className={`bg-white border border-rule border-l-[3px] rounded px-4 py-2.5 text-sm flex items-start gap-3 ${
-            pdfStatus.state === "error" ? "border-l-accent" : "border-l-secondary"
-          }`}
+          className={`notice ${pdfStatus.state === "error" ? "notice-error" : "notice-ok"}`}
         >
-          <p className={`flex-1 min-w-0 [overflow-wrap:anywhere] ${pdfStatus.state === "error" ? "text-accent" : "text-ink"}`}>
+          <p className="flex-1 min-w-0 [overflow-wrap:anywhere]">
             {pdfStatus.state === "generating" && `Gerando ${REPORT_NAME[pdfStatus.kind]}…`}
             {pdfStatus.state === "done" && (
               <>

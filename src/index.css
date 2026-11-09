@@ -20,19 +20,27 @@
 @font-face { font-family: "InterApp"; font-weight: 700 900; font-display: swap; src: url("/fonts/Inter-700.ttf") format("truetype"); }
 
 /*
- * Palette (design plan): ink for text, GSGA petróleo for headings and the
- * calculation memo, GSGA verde for credits/redutor/links, coral only for
- * alerts and tax due, a pale yellow paper for the page, and a rule
- * colour for separators and field borders.
+ * Palette (GSGA): a white page; ink for text; petróleo for headings, the one
+ * primary action and the calculation memo (the screen's main data element);
+ * verde for links, marks and focus; coral only for alerts and tax due.
+ * "paper" is the pale green-grey tint of the GSGA rule colour, used for hover
+ * rows, wells and the segmented track; "field" is the pale yellow of the
+ * cells the user fills. The -ink variants are the verde and the coral one step
+ * darker, for small text on white (the brand values sit near 4.3:1).
  */
 @theme {
   --color-ink: #1d2b2a;
   --color-primary: #143e3c;
   --color-secondary: #238783;
+  --color-secondary-ink: #1b6e6a;
   --color-accent: #e94b41;
-  --color-paper: #ede6b6;
-  --color-rule: #d5dedc;
-  --color-background: #ede6b6;
+  --color-accent-ink: #c8372e;
+  --color-paper: #f3f6f5;
+  --color-rule: #dfe6e4;
+  --color-control: #c5d0ce;
+  --color-field: #fff8dc;
+  --color-field-line: #eedc95;
+  --color-background: #ffffff;
   --color-text-gray: #4a5856;
 
   --font-sans: "AptosApp", "InterApp", ui-sans-serif, system-ui, sans-serif;
@@ -40,7 +48,7 @@
 
 @layer base {
   body {
-    @apply bg-paper text-ink font-sans;
+    @apply bg-white text-ink font-sans;
     /* Regular (400) for running text: the light weight read thin and grey on
        screens, and turned into Segoe UI Light where Aptos is missing. */
     font-weight: 400;
@@ -59,28 +67,16 @@
 /* Component classes sit in the components layer so a utility on the element
    (py-6, px-0, max-sm:p-0) overrides them. */
 @layer components {
-  /* Surfaces: white on paper with a rule border — no drop shadows. Radius follows
-     hierarchy: 4px fields and buttons, 8px panels. */
+  /* Surfaces: white panels on the white page, set apart by a 1px rule — no
+     drop shadows. Radius follows hierarchy: 6px fields and buttons, 8px panels. */
   .card {
     @apply bg-white rounded-lg border border-rule overflow-hidden;
   }
 
-  .input-field {
-    @apply w-full px-4 py-2 rounded-lg border border-gray-300 focus:ring-2 focus:ring-secondary focus:border-transparent outline-none transition-all text-primary;
-  }
-
-  .btn-primary {
-    @apply px-6 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors font-medium;
-  }
-
-  .btn-secondary {
-    @apply px-6 py-2 bg-secondary text-white rounded-lg hover:bg-secondary/90 transition-colors font-medium;
-  }
-
-  /* Tables read like a demonstrativo: plain column heads over a rule, thin rules
-     between rows, totals over a double rule. */
+  /* Tables read like a demonstrativo: plain grey column heads over a rule, no
+     fill band, light rules between rows, totals over a double rule. */
   .table-header {
-    @apply px-4 py-2.5 text-left text-xs font-semibold text-text-gray border-b border-rule bg-paper/60;
+    @apply px-4 py-2.5 text-left text-xs font-semibold text-text-gray border-b border-rule;
   }
 
   .table-cell {
@@ -94,33 +90,52 @@
 
   /* Section heading over the tables: type and space, not a coloured box. */
   .section-title {
-    @apply text-[21px] leading-tight font-semibold text-primary;
+    @apply text-lg leading-tight font-semibold text-primary;
   }
 
   .text-action {
-    @apply inline-flex items-center gap-1.5 text-sm font-semibold text-secondary hover:text-primary rounded px-1 cursor-pointer whitespace-nowrap;
+    @apply inline-flex items-center gap-1.5 text-sm font-semibold text-secondary-ink hover:text-primary rounded px-1 cursor-pointer whitespace-nowrap;
   }
 
-  /* Two-option switch (period, deduction mode): one white pill on a paper track. */
+  /* Two-option switch (period, deduction mode): one white pill on a pale track. */
   .segmented {
-    @apply inline-flex gap-1 p-1 bg-paper border border-rule rounded;
+    @apply inline-flex gap-1 p-1 bg-paper rounded-md;
   }
 
   .segmented button {
-    @apply px-3 py-1.5 text-sm rounded text-text-gray hover:text-primary cursor-pointer;
+    @apply px-3 py-1.5 text-sm rounded text-text-gray hover:text-primary cursor-pointer transition-colors;
   }
 
   .segmented button[aria-pressed="true"] {
-    @apply bg-white text-primary font-semibold border border-rule;
+    @apply bg-white text-primary font-semibold ring-1 ring-rule;
   }
 
-  /* Outlined header button; the filled variant marks the screen's one primary action. */
+  /* Header buttons, 36px tall: outlined in the control grey; the filled petróleo
+     one marks the screen's one primary action. */
   .btn-outline {
-    @apply flex items-center gap-2 text-sm font-semibold bg-white text-primary px-4 py-2.5 rounded border-2 border-primary hover:bg-paper transition-colors cursor-pointer disabled:cursor-not-allowed disabled:border-rule disabled:text-text-gray disabled:hover:bg-white;
+    @apply flex items-center gap-2 h-9 text-sm font-semibold bg-white text-primary px-3.5 rounded-md border border-control hover:bg-paper hover:border-primary/40 active:bg-rule transition-colors cursor-pointer disabled:cursor-not-allowed disabled:border-rule disabled:text-text-gray disabled:hover:bg-white;
   }
 
   .btn-filled {
-    @apply flex items-center gap-2 text-sm font-semibold bg-primary text-white px-4 py-2.5 rounded border-2 border-primary hover:bg-primary/90 transition-colors cursor-pointer;
+    @apply flex items-center gap-2 h-9 text-sm font-semibold bg-primary text-white px-3.5 rounded-md border border-primary hover:bg-primary/90 active:bg-primary/80 transition-colors cursor-pointer;
+  }
+
+  /* Notices: a pale tint of their own hue, never a coloured bar. */
+  .notice {
+    @apply rounded-md px-4 py-2.5 text-sm flex items-start gap-3 border;
+  }
+
+  .notice-ok {
+    @apply bg-paper border-rule text-ink;
+  }
+
+  .notice-error {
+    @apply bg-accent/5 border-accent/25 text-accent-ink;
+  }
+
+  /* A cell or box the user fills: pale yellow, as in the reference calculator. */
+  .field-box {
+    @apply bg-field border border-field-line;
   }
 
   /* Phone: the cell prints its column name (data-label) above the value. */

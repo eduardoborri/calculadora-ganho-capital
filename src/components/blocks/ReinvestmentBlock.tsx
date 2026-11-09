@@ -18,7 +18,7 @@ export default function ReinvestmentBlock({ input, onChange, result }: BlockWith
   const outcome = result.status === "ok" ? result.reinvestment : null;
 
   const control = (
-    <label className="flex items-center gap-2 text-sm font-semibold text-secondary cursor-pointer">
+    <label className="flex items-center gap-2 text-sm font-semibold text-secondary-ink cursor-pointer">
       <input
         type="checkbox"
         checked={reinvestment.enabled}
@@ -36,7 +36,7 @@ export default function ReinvestmentBlock({ input, onChange, result }: BlockWith
       collapsed={!reinvestment.enabled}
       summary="Isenção do ganho aplicado na compra de imóvel residencial em até 180 dias (Lei 11.196/2005, art. 39). Marque para informar as aplicações."
     >
-      <p className="text-sm text-ink border-l-[3px] border-accent pl-3">
+      <p className="notice notice-ok leading-relaxed block">
         {deadline ? (
           <>
             Data-limite para aplicar: <strong className="font-semibold">{formatDate(deadline)}</strong>, o dia {REINVESTMENT_DAYS} contado
@@ -124,15 +124,15 @@ export default function ReinvestmentBlock({ input, onChange, result }: BlockWith
 
       {outcome && (
         <dl className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-sm">
-          <div className="bg-paper/50 rounded p-3">
+          <div className="bg-paper rounded-md px-4 py-3 space-y-0.5">
             <dt className="text-xs text-text-gray">Produto da venda, líquido de corretagem</dt>
             <dd className="font-semibold text-primary tabular-nums">{formatCurrency(round2(outcome.proceeds))}</dd>
           </div>
-          <div className="bg-paper/50 rounded p-3">
+          <div className="bg-paper rounded-md px-4 py-3 space-y-0.5">
             <dt className="text-xs text-text-gray">Aplicado no prazo</dt>
             <dd className="font-semibold text-primary tabular-nums">{formatCurrency(round2(outcome.applied))}</dd>
           </div>
-          <div className="bg-paper/50 rounded p-3">
+          <div className="bg-paper rounded-md px-4 py-3 space-y-0.5">
             <dt className="text-xs text-text-gray">Parte tributada do ganho</dt>
             <dd className="font-semibold text-primary tabular-nums">{formatPercent(outcome.taxedShare)}</dd>
           </div>

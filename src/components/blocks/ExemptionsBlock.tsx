@@ -9,7 +9,7 @@ import { BlockCard, CheckField, MoneyField } from "./fields";
 // What the engine found for one exemption: applies, or each missing requirement with its reason.
 function ExemptionStatus({ check, ready }: { check: ExemptionCheck; ready: boolean }) {
   if (!ready) return <p className="text-xs text-text-gray">Complete o caso para verificar os requisitos.</p>;
-  if (check.applies) return <p className="text-sm font-semibold text-secondary">Isenção aplicável: o ganho fica isento.</p>;
+  if (check.applies) return <p className="text-sm font-semibold text-secondary-ink">Isenção aplicável: o ganho fica isento.</p>;
   return (
     <div className="space-y-1">
       <p className="text-xs font-semibold text-text-gray">Não aplicada. Requisitos faltantes:</p>
