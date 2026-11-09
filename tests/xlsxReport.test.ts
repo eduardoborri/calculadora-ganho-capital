@@ -153,6 +153,50 @@ const CASES: [string, CaseInput][] = [
     }),
   ],
   ['zero cost: one virtual line', caso({acquisitionDate: '2010-03-10', contractDate: '2011-03-20', saleValue: 100000})],
+  [
+    'gross gain below zero: no tax and no negative base',
+    caso({...base, saleValue: 300000, costItems: [item('compra', '2015-03-10', 400000)]}),
+  ],
+  [
+    'sale in parts with the prior part outside the window',
+    caso({
+      ...base,
+      saleMode: 'partes',
+      saleValue: 4000000,
+      costItems: [item('compra', '2015-03-10', 1000000)],
+      priorParts: [{id: 'a', date: '2023-06-10', gain: 4000000, taxPaid: 600000}],
+    }),
+  ],
+  [
+    'condominium in an installment sale',
+    caso({
+      ...base,
+      saleMode: 'prazo',
+      ownership: 'condominio',
+      quotaPct: 50,
+      saleValue: 1000000,
+      costItems: [item('compra', '2015-03-10', 300000)],
+      installments: [parcela('a', '2025-10-15', 200000, 5000), parcela('b', '2025-11-17', 300000)],
+    }),
+  ],
+  [
+    'sale in parts with the Rearp undone',
+    caso({
+      acquisitionDate: '1985-06-10',
+      contractDate: '2027-03-10',
+      saleMode: 'partes',
+      saleValue: 1500000,
+      priorParts: [{id: 'a', date: '2026-06-10', gain: 100000, taxPaid: 15000}],
+      update: update({
+        law: 'rearp',
+        date: '2026-01-15',
+        caa: 300000,
+        dta: 700000,
+        originalAcquisitionDate: '1985-06-10',
+        taxPaidSelic: 10000,
+      }),
+    }),
+  ],
 ];
 
 // ---- recalculation ----
@@ -171,7 +215,21 @@ function formulaOf(value: unknown): string | null {
 // fast-formula-parser 1.0.x has no MIN and MAX, and ROUND is only reached by the conference rows,
 // so these three are registered with Excel semantics. A parameter may come wrapped as
 // {value, isArray, isRangeRef, isCellRef, omitted}, as a plain value, or as a (nested) array from a
-// range. Only numbers count: empty cells, text and booleans in ranges are ignored.
+// range. Only numbers count: empty cells, text and booleans in ranges are ignored. An error value
+// in any argument, direct or inside a range, propagates as in Excel.
+function firstError(param: unknown): unknown {
+  if (isError(param)) return param;
+  if (Array.isArray(param)) {
+    for (const entry of param) {
+      const found = firstError(entry);
+      if (found !== undefined) return found;
+    }
+    return undefined;
+  }
+  if (param !== null && typeof param === 'object' && 'value' in param) return firstError((param as {value: unknown}).value);
+  return undefined;
+}
+
 function numbersOf(param: unknown): number[] {
   if (Array.isArray(param)) return param.flatMap(numbersOf);
   if (param !== null && typeof param === 'object' && 'value' in param) return numbersOf((param as {value: unknown}).value);
@@ -179,13 +237,17 @@ function numbersOf(param: unknown): number[] {
 }
 
 // MIN and MAX of no numbers are 0, as in Excel.
-const extreme = (pick: (a: number, b: number) => number) => (...params: unknown[]) => {
+const extreme = (pick: (a: number, b: number) => number) => (...params: unknown[]): unknown => {
+  const error = firstError(params);
+  if (error !== undefined) return error;
   const values = params.flatMap(numbersOf);
   return values.length === 0 ? 0 : values.reduce((acc, v) => pick(acc, v));
 };
 
 // Half away from zero, after trimming binary noise to 15 significant digits.
-function excelRound(number: unknown, digits?: unknown): number {
+function excelRound(number: unknown, digits?: unknown): unknown {
+  const error = firstError([number, digits]);
+  if (error !== undefined) return error;
   const x = numbersOf(number)[0] ?? 0;
   const d = digits === undefined ? 0 : (numbersOf(digits)[0] ?? 0);
   const factor = 10 ** Math.trunc(d);
@@ -349,6 +411,32 @@ describe('spreadsheet values', () => {
     const g1 = ws.getCell(valueCellOf(ws, 'G1'));
     expect(formulaOf(g1.value)).not.toBeNull();
     expect(g1.font.color?.argb).toBe('FF000000');
+  });
+
+  it('the Rearp reversal flag is informative: grey, no yellow, no list', () => {
+    const {ws} = build(CASES[7][1]);
+    const u4 = ws.getCell(valueCellOf(ws, 'U4'));
+    expect(u4.value).toBe(1);
+    expect(u4.font.color?.argb).toBe('FF7F7F7F');
+    expect(u4.font.italic).toBe(true);
+    expect((u4.fill as {fgColor?: {argb?: string}} | undefined)?.fgColor?.argb).not.toBe('FFFFFF00');
+    expect(u4.dataValidation?.type).toBeUndefined();
+  });
+
+  it('editable flags carry the 1/0 note and the list', () => {
+    const {ws} = build(CASES[1][1]);
+    const r3 = ws.getCell(valueCellOf(ws, 'R3'));
+    expect(r3.dataValidation?.type).toBe('list');
+    expect(String(r3.note)).toContain('1 = Sim, 0 = Não');
+  });
+
+  it('custom MIN, MAX and ROUND follow Excel', () => {
+    const err = new Error('#DIV/0!');
+    expect(EXCEL_FUNCTIONS.MIN({value: [[3, null, 'x'], [1]]}, {value: 2})).toBe(1);
+    expect(EXCEL_FUNCTIONS.MAX({value: [[null]]})).toBe(0);
+    expect(EXCEL_FUNCTIONS.MAX({value: [[1, err]]})).toBe(err);
+    expect(EXCEL_FUNCTIONS.ROUND({value: -2.345}, {value: 2})).toBe(-2.35);
+    expect(EXCEL_FUNCTIONS.ROUND({value: err}, {value: 2})).toBe(err);
   });
 
   it('marks a manual value', () => {

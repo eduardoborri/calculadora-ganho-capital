@@ -101,6 +101,7 @@ const DARK = "FF143E3C";
 const TEAL = "FF238783";
 const MUTED = "FF595959";
 const RED = "FFC00000";
+const INFO = "FF7F7F7F"; // grey italic: informative value, fixed at export
 const MONEY = 'R$ #,##0.00;-R$ #,##0.00;"-"';
 const PCT = "0.00%";
 const PCT6 = "0.000000%";
@@ -110,6 +111,7 @@ const INDEX = "0.0000####";
 const INT = "0";
 const QUOTA = '0.00" %"';
 const FLAG = '"Sim";"Sim";"Não"';
+const FLAG_NOTE = "1 = Sim, 0 = Não.";
 const fill = (argb: string): ExcelJSTypes.Fill => ({ type: "pattern", pattern: "solid", fgColor: { argb } });
 const YELLOW = fill("FFFFFF00");
 const TOOL_FILL = fill("FFEDEDED");
@@ -290,7 +292,14 @@ function buildSheet(ws: Sheet, input: CaseInput, result: CaseResult): Conference
     finish();
   };
 
-  type Kind = "input" | "fill" | "formula" | "total" | "result";
+  // "info": grey italic, a value that follows from the data on screen and is not meant to be edited
+  // here (changing it would not recalculate consistently; a new export is needed).
+  type Kind = "input" | "fill" | "formula" | "total" | "result" | "info";
+  const flagCell = (r: number, c: number) => {
+    const cell = ws.getCell(r, c);
+    cell.dataValidation = { type: "list", allowBlank: false, formulae: ['"0,1"'] };
+    cell.note = FLAG_NOTE;
+  };
   // Single-value row: reference, label, value in column C and the note from column D on.
   const line = (ref: string, label: string, value: Value, fmt: string, text: string, kind: Kind = "formula") => {
     R[ref] = row;
@@ -303,17 +312,22 @@ function buildSheet(ws: Sheet, input: CaseInput, result: CaseResult): Conference
       bold,
       fmt,
       align: "right",
-      color: isInput ? BLUE : BLACK,
+      color: isInput ? BLUE : kind === "info" ? INFO : BLACK,
+      italic: kind === "info",
       fill: kind === "fill" ? YELLOW : rowFill,
     });
-    if (fmt === FLAG) ws.getCell(row, 3).dataValidation = { type: "list", allowBlank: false, formulae: ['"0,1"'] };
+    const editableFlag = fmt === FLAG && isInput;
+    if (editableFlag) flagCell(row, 3);
+    if (editableFlag) text = `${text} ${FLAG_NOTE}`;
     note(row, text);
     finish(text.length > 120 ? 30 : undefined);
   };
   const inputCell = (r: number, c: number, value: number, fmt: string, yellow = false) => {
     put(r, c, value, { color: BLUE, fill: yellow ? YELLOW : undefined, fmt, align: "right" });
-    if (fmt === FLAG) ws.getCell(r, c).dataValidation = { type: "list", allowBlank: false, formulae: ['"0,1"'] };
+    if (fmt === FLAG) flagCell(r, c);
   };
+  const infoCell = (r: number, c: number, value: number, fmt: string) =>
+    put(r, c, value, { color: INFO, italic: true, fmt, align: "right" });
   const formulaCell = (r: number, c: number, formula: string, fmt: string, bold = false, rowFill?: ExcelJSTypes.Fill) =>
     put(r, c, f(formula), { fmt, align: "right", bold, fill: rowFill });
 
@@ -340,7 +354,8 @@ function buildSheet(ws: Sheet, input: CaseInput, result: CaseResult): Conference
     3,
     1,
     "Legenda: texto azul = dado de entrada (valor da ferramenta na exportação) · fundo amarelo = dado a conferir ou preencher " +
-      "(tabela legal, contagem de meses ou requisito) · texto preto = fórmula. Alterar uma entrada recalcula toda a apuração; " +
+      "(tabela legal, contagem de meses ou requisito; Sim/Não como 1 ou 0) · texto preto = fórmula · cinza itálico = informativo, " +
+      "segue dos dados da tela e só muda com nova exportação. Alterar uma entrada recalcula toda a apuração; " +
       "a seção 10 compara o resultado com o da ferramenta.",
     { size: 9, color: MUTED, wrap: true },
   );
@@ -355,11 +370,11 @@ function buildSheet(ws: Sheet, input: CaseInput, result: CaseResult): Conference
   line("P2", "Taxa mensal do fator de redução FR2", FR2_RATE, PCT,
     "Lei 11.196/2005, art. 40; IN SRF 599/2005, art. 3º. FR2 = 1 ÷ (1 + P2)^m2.", "fill");
   line("P3", "Limite da isenção de pequeno valor (no mês)", SMALL_VALUE_LIMIT, MONEY,
-    "IN SRF 599/2005, art. 1º: conjunto de bens da mesma natureza alienados no mês, na parte do titular. Informativo: o requisito entra como Sim/Não na seção 6.", "input");
+    "IN SRF 599/2005, art. 1º: conjunto de bens da mesma natureza alienados no mês, na parte do titular. Informativo: o requisito entra como Sim/Não na seção 6.", "info");
   line("P4", "Limite da isenção do único imóvel", SINGLE_PROPERTY_LIMIT, MONEY,
-    "Lei 9.250/1995, art. 23; IN SRF 84/2001, art. 29, I: sem outra alienação, tributada ou não, em 5 anos. Informativo: o requisito entra como Sim/Não na seção 6.", "input");
+    "Lei 9.250/1995, art. 23; IN SRF 84/2001, art. 29, I: sem outra alienação, tributada ou não, em 5 anos. Informativo: o requisito entra como Sim/Não na seção 6.", "info");
   line("P5", "Prazo do reinvestimento (dias)", REINVESTMENT_DAYS, INT,
-    "Lei 11.196/2005, art. 39; IN SRF 599/2005, art. 2º: o dia 180 conta, o 181 não. Informativo: cada aplicação entra como dentro ou fora do prazo na seção 7.", "input");
+    "Lei 11.196/2005, art. 39; IN SRF 599/2005, art. 2º: o dia 180 conta, o 181 não. Informativo: cada aplicação entra como dentro ou fora do prazo na seção 7.", "info");
   const qualitative: [string, string][] = [
     ["Q1", "Art. 18 da Lei 7.713/1988: redução de 5 pontos percentuais por ano de aquisição, de 100% até 1969 a 5% em 1988; sem redução para aquisição a partir de 1989. Percentual por item na coluna E da seção 5."],
     ["Q2", "m1 conta de jan/1996, ou do mês de aquisição se posterior, até nov/2005, só para item até nov/2005. m2 conta de dez/2005, ou do mês de aquisição se posterior, até o mês da alienação. Os dois contam o mês inicial e o final (Perguntão IRPF 2026, pergunta 649)."],
@@ -414,15 +429,19 @@ function buildSheet(ws: Sheet, input: CaseInput, result: CaseResult): Conference
       `Valor do titular, como declarado. Data da atualização: ${formatDate(update.date)}.`, "input");
     if (update.law === "14973") {
       line("U3", "Meses completos desde a atualização", completedMonths(update.date, input.contractDate), INT,
-        `De ${formatDate(update.date)} a ${formatDate(input.contractDate)}. Informativo: define o percentual de U4.`, "input");
+        `De ${formatDate(update.date)} a ${formatDate(input.contractDate)}. Informativo: define o percentual de U4.`, "info");
       line("U4", "Percentual do DTA no custo", law14973Percent(completedMonths(update.date, input.contractDate)), PCT,
         `${law14973Note()} GK = valor de alienação − [CAA + (DTA × %)].`, "fill");
     } else {
       const reversal = isRearpReversal(update, input.contractDate);
       line("U3", "Imposto pago no Rearp, corrigido pela Selic", update.taxPaidSelic, MONEY,
         "Valor digitado pelo usuário. Deduzido do imposto só quando a venda desfaz a adesão (Lei 15.265/2025, art. 7º).", "input");
+      // Informative only: the reversal also sets the cost line, its date and its factors, which are
+      // fixed at export, so editing this cell alone would give a wrong amount payable.
       line("U4", "Venda em até 5 anos da adesão, fora de causa mortis ou partilha (desfaz o Rearp)", reversal ? 1 : 0, FLAG,
-        "Lei 15.265/2025, art. 7º: volta o custo e a data originais e deduz o imposto pago corrigido. Data para art. 18 e art. 40 na adesão: a da Deap ou do pagamento, a que ocorrer por último (IN RFB 2.302/2025, art. 7º, § 2º).", "fill");
+        "Segue das datas: alienação até 5 anos da adesão, salvo causa mortis ou partilha (Lei 15.265/2025, art. 7º). Desfeito, volta o custo e a data originais " +
+          "(seção 3) e deduz-se U3. Fora desse caso, vale a data da Deap ou do pagamento, a que ocorrer por último (IN RFB 2.302/2025, art. 7º, § 2º). " +
+          "Não alterar aqui: a mudança de regime exige nova exportação.", "info");
     }
   }
 
@@ -451,10 +470,10 @@ function buildSheet(ws: Sheet, input: CaseInput, result: CaseResult): Conference
     } else if (cr.kind === "manual") {
       const [y, m] = item.date.split("-").map(Number);
       const index = costIndex(item.original.moeda, y, m);
-      inputCell(r, 4, item.original.amount, MONEY);
-      if (index !== null) inputCell(r, 5, index, INDEX);
+      infoCell(r, 4, item.original.amount, MONEY);
+      if (index !== null) infoCell(r, 5, index, INDEX);
       inputCell(r, 6, item.value, MONEY, true);
-      notes.push("Valor informado manualmente, no lugar do valor padrão (valor original ÷ índice do Anexo Único, IN SRF 84/2001, art. 7º).");
+      notes.push("Valor informado manualmente, no lugar do valor padrão (valor original ÷ índice do Anexo Único, IN SRF 84/2001, art. 7º). Valor original e índice só informativos.");
     } else if (cr.kind === "plain") {
       inputCell(r, 6, item.value, MONEY);
       if (item.date > COST_INDEX_END) notes.push("Custo a partir de 1996, sem correção (IN SRF 84/2001, art. 8º).");
@@ -551,7 +570,7 @@ function buildSheet(ws: Sheet, input: CaseInput, result: CaseResult): Conference
     section("7. REINVESTIMENTO EM IMÓVEL RESIDENCIAL (LEI 11.196/2005, ART. 39)");
     const { deadline } = result.reinvestment;
     header([
-      [1, "Ref."], [2, "Aplicação"], [3, "Data"], [4, "Valor aplicado"], [5, "Dentro do prazo?"], [6, "Valor considerado"], [7, "Observação"],
+      [1, "Ref."], [2, "Aplicação"], [3, "Data"], [4, "Valor aplicado"], [5, "Dentro do prazo? (1 = Sim, 0 = Não)"], [6, "Valor considerado"], [7, "Observação"],
     ], { 7: LAST_COL });
     const appRows: number[] = [];
     input.reinvestment.applications.forEach((app, index) => {
@@ -598,7 +617,7 @@ function buildSheet(ws: Sheet, input: CaseInput, result: CaseResult): Conference
     sub("Alienação em partes: partes anteriores");
     header([
       [1, "Ref."], [2, "Parte anterior"], [3, "Data"], [4, "Ganho tributável"], [5, "Imposto pago"],
-      [6, "Soma nesta apuração?"], [7, "Ganho somado"], [8, "Imposto deduzido"], [9, "Observação"],
+      [6, "Soma nesta apuração? (1 = Sim, 0 = Não)"], [7, "Ganho somado"], [8, "Imposto deduzido"], [9, "Observação"],
     ], { 9: LAST_COL });
     const inWindow = summedPriorParts(input).length > 0 ? 1 : 0;
     const partRows: number[] = [];
