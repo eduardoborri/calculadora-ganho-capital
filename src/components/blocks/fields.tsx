@@ -7,7 +7,7 @@ import { cellInput } from "../shared/styles";
 import Tooltip from "../shared/Tooltip";
 
 export const fieldBox =
-  "flex items-center gap-2 px-3 py-2 bg-yellow-50 border border-yellow-200 rounded focus-within:ring-2 focus-within:ring-secondary/40";
+  "flex items-center gap-2 h-10 px-3 field-box rounded-md focus-within:border-secondary focus-within:ring-2 focus-within:ring-secondary/25 transition-colors";
 
 interface BlockCardProps {
   title: string;
@@ -70,9 +70,9 @@ export function MoneyField({ label, value, onChange, tooltip, hint, unit = "R$",
   return (
     <Field label={label} tooltip={tooltip} hint={hint} className={className}>
       <div className={fieldBox}>
-        {unit === "R$" && <span className="text-xs text-gray-500 font-semibold">R$</span>}
+        {unit === "R$" && <span className="text-xs text-text-gray font-semibold">R$</span>}
         <CurrencyInput value={value} onChange={onChange} ariaLabel={label} className={`${cellInput} text-right`} />
-        {unit === "%" && <span className="text-xs text-gray-500 font-semibold">%</span>}
+        {unit === "%" && <span className="text-xs text-text-gray font-semibold">%</span>}
       </div>
     </Field>
   );
@@ -184,7 +184,7 @@ export function SelectField<T extends string>({ label, value, options, onChange,
         value={value}
         aria-label={label}
         onChange={(e) => onChange(e.target.value as T)}
-        className="w-full text-sm px-3 py-2 border border-yellow-200 rounded bg-yellow-50 text-primary font-semibold"
+        className="w-full h-10 text-sm px-3 field-box rounded-md text-primary font-semibold focus:outline-none focus:border-secondary focus:ring-2 focus:ring-secondary/25"
       >
         {options.map((option) => (
           <option key={option.value} value={option.value}>

@@ -32,7 +32,7 @@ export default function ValueUpdateBlock({ input, onChange }: BlockProps) {
   const set = (patch: Partial<ValueUpdate>) => update && onChange({ update: { ...update, ...patch } });
 
   const control = (
-    <label className="flex items-center gap-2 text-sm font-semibold text-secondary cursor-pointer">
+    <label className="flex items-center gap-2 text-sm font-semibold text-secondary-ink cursor-pointer">
       <input
         type="checkbox"
         checked={update !== null}

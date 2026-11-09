@@ -53,7 +53,7 @@ function HistoryList({ entries, onOpen, onRemove, onClearAll }: Omit<WelcomeScre
                     <button
                       type="button"
                       onClick={() => onRemove(entry.id)}
-                      className="inline-flex items-center gap-1 text-sm text-text-gray hover:text-accent cursor-pointer"
+                      className="inline-flex items-center gap-1 text-sm text-text-gray hover:text-accent-ink cursor-pointer"
                     >
                       <Trash2 className="w-4 h-4" />
                       Excluir
@@ -70,7 +70,7 @@ function HistoryList({ entries, onOpen, onRemove, onClearAll }: Omit<WelcomeScre
         onClick={() => {
           if (window.confirm("Excluir todas as simulações salvas neste computador? Não é possível desfazer.")) onClearAll();
         }}
-        className="inline-flex items-center gap-1.5 text-sm font-semibold text-text-gray hover:text-accent cursor-pointer"
+        className="inline-flex items-center gap-1.5 text-sm font-semibold text-text-gray hover:text-accent-ink cursor-pointer"
       >
         <Trash2 className="w-4 h-4" />
         Limpar tudo
@@ -82,8 +82,8 @@ function HistoryList({ entries, onOpen, onRemove, onClearAll }: Omit<WelcomeScre
 // First screen: start a new case or reopen one saved on this computer.
 export default function WelcomeScreen({ entries, onStart, onOpen, onRemove, onClearAll, onResume }: WelcomeScreenProps) {
   return (
-    <section className="bg-white border border-rule rounded-lg px-6 py-8 md:px-12 md:py-12">
-      <h2 className="text-2xl md:text-[32px] leading-tight font-semibold text-primary">Apuração do ganho de capital na venda de imóvel</h2>
+    <section className="card px-6 py-8 md:px-12 md:py-12">
+      <h2 className="text-2xl md:text-[28px] leading-tight font-semibold tracking-[-0.01em] text-primary">Apuração do ganho de capital na venda de imóvel</h2>
       <p className="mt-3 text-base text-text-gray leading-relaxed max-w-[62ch]">
         Pessoa física residente no Brasil, imóvel no Brasil. A calculadora aplica as reduções do art. 18, FR1 e FR2, as isenções e a
         tabela progressiva, e mostra a memória de cálculo linha a linha. Os dados ficam só neste navegador.
@@ -93,7 +93,7 @@ export default function WelcomeScreen({ entries, onStart, onOpen, onRemove, onCl
         <button
           type="button"
           onClick={onStart}
-          className="inline-flex items-center gap-2 bg-primary text-white text-base font-semibold px-6 py-3 rounded hover:bg-primary/90 transition-colors cursor-pointer"
+          className="inline-flex items-center gap-2 h-11 bg-primary text-white text-base font-semibold px-5 rounded-md hover:bg-primary/90 active:bg-primary/80 transition-colors cursor-pointer"
         >
           <FilePlus className="w-5 h-5" />
           Começar do zero

@@ -57,7 +57,7 @@ export default function Tooltip({ text }: TooltipProps) {
         onMouseLeave={() => setHovered(false)}
         onFocus={() => setFocused(true)}
         onBlur={() => setFocused(false)}
-        className="align-middle text-gray-500 hover:text-secondary focus:text-secondary focus:outline-none focus-visible:ring-2 focus-visible:ring-secondary rounded-full cursor-help"
+        className="align-middle text-text-gray hover:text-secondary focus:text-secondary focus:outline-none focus-visible:ring-2 focus-visible:ring-secondary rounded-full cursor-help"
       >
         <HelpCircle className="w-3.5 h-3.5" />
       </button>

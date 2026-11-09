@@ -78,7 +78,7 @@ export default function RowTable<T extends { id: string }>({
                   <td
                     key={column.header}
                     data-label={column.header}
-                    className={`table-cell ${column.align === "right" ? "text-right" : ""} ${column.yellow ? `bg-yellow-50 ${stackCellYellow}` : stackCell} ${columnIndex === 0 ? "max-sm:col-span-2" : ""}`}
+                    className={`table-cell ${column.align === "right" ? "text-right" : ""} ${column.yellow ? `bg-field ${stackCellYellow}` : stackCell} ${columnIndex === 0 ? "max-sm:col-span-2" : ""}`}
                   >
                     {column.render(row, index)}
                   </td>
@@ -88,7 +88,7 @@ export default function RowTable<T extends { id: string }>({
                     type="button"
                     onClick={() => onRemove(row.id)}
                     aria-label={`Excluir ${rowLabel(row, index)}`}
-                    className="p-1 text-gray-500 hover:text-accent rounded-md transition-colors cursor-pointer"
+                    className="p-1 text-text-gray hover:text-accent-ink rounded-md transition-colors cursor-pointer"
                   >
                     <Trash2 className="w-4 h-4" />
                   </button>

@@ -66,12 +66,12 @@ export function ValueCell({ item, onReplace }: { item: CostItem; onReplace: (ite
           onClick={() => onReplace({ ...item, manual: false })}
           title="Valor informado manualmente. Clique para voltar à correção pelo Anexo Único."
           aria-label="Voltar ao valor corrigido pelo Anexo Único"
-          className="p-0.5 rounded text-secondary hover:bg-paper cursor-pointer shrink-0"
+          className="p-0.5 rounded text-secondary-ink hover:bg-paper cursor-pointer shrink-0"
         >
           <RotateCcw className="w-3.5 h-3.5" />
         </button>
       ) : (
-        <span className="text-[10px] font-semibold text-gray-500 shrink-0" title="Valor original ÷ índice do Anexo Único">
+        <span className="text-[10px] font-semibold text-text-gray shrink-0" title="Valor original ÷ índice do Anexo Único">
           auto
         </span>
       )}
@@ -109,7 +109,7 @@ export function OriginalRow({ item, onReplace, colSpan }: { item: CostItem; onRe
                 <select
                   value={item.original?.moeda ?? ""}
                   onChange={(e) => setMoeda(e.target.value)}
-                  className="text-xs px-2 py-1 border border-yellow-200 rounded bg-yellow-50 text-primary font-semibold"
+                  className="text-xs px-2 py-1 field-box rounded text-primary font-semibold"
                 >
                   <option value="">Sem valor original</option>
                   {options.map((moeda) => (
@@ -121,7 +121,7 @@ export function OriginalRow({ item, onReplace, colSpan }: { item: CostItem; onRe
               </label>
               <label className="flex items-center gap-2">
                 Valor original
-                <span className="w-36 px-2 py-1 bg-yellow-50 border border-yellow-200 rounded">
+                <span className="w-36 px-2 py-1 field-box rounded">
                   <CurrencyInput
                     value={item.original?.amount ?? 0}
                     onChange={setAmount}
