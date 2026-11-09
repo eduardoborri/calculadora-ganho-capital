@@ -46,6 +46,16 @@ function reinv(partial: Partial<CaseInput['reinvestment']>): CaseInput['reinvest
 
 const base = {acquisitionDate: '2015-03-10', contractDate: '2025-10-10'};
 
+// Perguntao IRPF 2026, question 632: declared cost of 60.000,00 dated 1990 and a torna of
+// 10.000,00. The value of the property received (60.000,00) is fictitious.
+const permutaOficial: Partial<CaseInput> = {
+  acquisitionDate: '1990-10-15',
+  contractDate: '2025-05-05',
+  costItems: [item('dado', '1990-10-15', 60000, {manual: true})],
+  operation: 'permuta',
+  permuta: {torna: 10000, receivedValue: 60000},
+};
+
 const CASES: [string, CaseInput][] = [
   [
     'case 1: m1 = 0, m2 = 195',
@@ -197,7 +207,20 @@ const CASES: [string, CaseInput][] = [
       }),
     }),
   ],
+  ['permuta: official example of question 632, cash', caso(permutaOficial)],
+  [
+    'permuta: torna in installments with brokerage',
+    caso({
+      ...permutaOficial,
+      saleMode: 'prazo',
+      installments: [parcela('a', '2025-05-20', 4000, 200), parcela('b', '2025-08-20', 6000, 300)],
+    }),
+  ],
+  ['permuta in a condominium of 50%', caso({...permutaOficial, ownership: 'condominio', quotaPct: 50, brokerage: 100})],
+  ['permuta sem torna, with brokerage', caso({...permutaOficial, permuta: {torna: 0, receivedValue: 60000}, brokerage: 100})],
 ];
+
+const CONFERENCE_LABELS = ['Ganho bruto', 'Base tributável', 'Imposto pela tabela', 'Imposto a pagar', 'Soma do cronograma'];
 
 // ---- recalculation ----
 
@@ -352,13 +375,8 @@ describe('spreadsheet conference', () => {
       const {workbook, conference, ws} = build(input);
       expect(workbook.calcProperties.fullCalcOnLoad).toBe(true);
       expect(workbook.worksheets.map((sheet) => sheet.name)).toEqual(['Apuração']);
-      expect(conference.map((row) => row.label)).toEqual([
-        'Ganho bruto',
-        'Base tributável',
-        'Imposto pela tabela',
-        'Imposto a pagar',
-        'Soma do cronograma',
-      ]);
+      const permuta = input.operation === 'permuta' ? ['Custo do imóvel recebido'] : [];
+      expect(conference.map((row) => row.label)).toEqual([...CONFERENCE_LABELS, ...permuta]);
 
       const value = recalculator(ws);
       for (const address of formulaAddresses(ws)) {
@@ -448,6 +466,35 @@ describe('spreadsheet values', () => {
       });
     });
     expect(marked).toBe(true);
+  });
+
+  it('permuta: the official example gives the proportion, the gain and the received cost by formula', () => {
+    const {ws} = build(caso(permutaOficial));
+    const value = recalculator(ws);
+    expect(formulaOf(ws.getCell(valueCellOf(ws, 'VK')).value)).not.toBeNull();
+    expect(value(valueCellOf(ws, 'VK')) as number).toBeCloseTo(10000 / 70000, 9);
+    expect(Math.round((value(valueCellOf(ws, 'G1')) as number) * 100) / 100).toBe(1428.57);
+    expect(Math.round((value(valueCellOf(ws, 'KR')) as number) * 100) / 100).toBe(51428.57);
+    expect(value(valueCellOf(ws, 'V8')) as number).toBe(70000);
+    expect(Math.round((value(valueCellOf(ws, 'B4')) as number) * 100) / 100).toBe(46.43);
+    const torna = ws.getCell(valueCellOf(ws, 'V1'));
+    expect(torna.value).toBe(10000);
+    expect(torna.font.color?.argb).toBe('FF0000FF');
+    expect(ws.getCell(valueCellOf(ws, 'V6')).font.color?.argb).toBe('FF0000FF');
+  });
+
+  it('permuta: changing the torna moves the proportion and the gain', () => {
+    const {ws} = build(caso(permutaOficial));
+    ws.getCell(valueCellOf(ws, 'V1')).value = 20000;
+    const value = recalculator(ws);
+    expect(value(valueCellOf(ws, 'VK')) as number).toBeCloseTo(20000 / 80000, 9);
+    expect(value(valueCellOf(ws, 'G1')) as number).toBeCloseTo(20000 - 60000 * 0.25, 6);
+  });
+
+  it('a sale has no permuta rows', () => {
+    const {ws} = build(CASES[0][1]);
+    expect(() => valueCellOf(ws, 'VK')).toThrow();
+    expect(() => valueCellOf(ws, 'KR')).toThrow();
   });
 
   it('refuses a case that is not ok', () => {

@@ -10,13 +10,14 @@ import {
   TAX_BRACKETS,
 } from "../constants";
 import { costIndex } from "../data/custoAte1995";
-import { ACQUISITION_FORM_LABEL, OWNERSHIP_LABEL, SALE_MODE_LABEL } from "../data/labels";
+import { ACQUISITION_FORM_LABEL, OPERATION_LABEL, OWNERSHIP_LABEL, SALE_MODE_LABEL } from "../data/labels";
 import type { CaseInput, CaseResult, CostItem, ItemReduction } from "../types";
 import { art18Percent, countM1, countM2, usesCostIndex } from "./capitalGain";
 import { filledItems } from "./costItems";
 import { completedMonths, isValidDate, lastBusinessDayOfNextMonth, reportYear, todayInBrazil } from "./dates";
 import { isApplicationCounted } from "./exemptions";
 import { formatDate } from "./format";
+import { isPermuta } from "./holder";
 import { reportFileName } from "./pdfReport";
 import { summedPriorParts } from "./saleModes";
 import { applyValueUpdate, isRearpReversal, law14973Percent } from "./valueUpdate";
@@ -107,6 +108,7 @@ const INFO = "FF7F7F7F"; // grey italic: informative value, fixed at export
 const MONEY = 'R$ #,##0.00;-R$ #,##0.00;"-"';
 const PCT = "0.00%";
 const PCT6 = "0.000000%";
+const PCT4 = "0.0000%";
 const FACTOR = "0.000000";
 const RATIO = "0.000000000";
 const INDEX = "0.0000####";
@@ -324,6 +326,9 @@ function buildSheet(ws: Sheet, input: CaseInput, result: CaseResult): Conference
   const prazo = input.saleMode === "prazo";
   const partes = input.saleMode === "partes";
   const condominio = input.ownership === "condominio";
+  // Permuta com torna: the torna takes the place of the sale value and every cost line goes
+  // against it in the proportion VK = torna / (cost + torna) (Perguntao IRPF 2026, 632).
+  const permuta = isPermuta(input);
 
   // ---------------------------------------------------------------- title
   merge(1, 1, LAST_COL);
@@ -371,6 +376,9 @@ function buildSheet(ws: Sheet, input: CaseInput, result: CaseResult): Conference
     ["Q4", "Custo até 31/12/1995: valor original dividido pelo índice do Anexo Único da IN SRF 84/2001 (art. 7º); custo a partir de 1996 sem correção (art. 8º)."],
     ["Q5", "Imposto pela tabela progressiva, por faixa, sobre a base final (Lei 8.981/1995, art. 21, com a redação da Lei 13.259/2016). Contas em precisão total; arredondamento em duas casas só na conferência."],
   ];
+  if (permuta) {
+    qualitative.push(["Q7", "Permuta com torna: só a torna recebida em dinheiro gera ganho; cada linha de custo entra na proporção VK = torna ÷ (custo + torna), e sem torna não há ganho. Custo do imóvel recebido = custo do imóvel dado − (torna − VK × torna). Pequeno valor e único imóvel comparam o valor total da operação, torna mais imóvel recebido (Perguntão IRPF 2026, perguntas 632, 634 e 681; RIR/2018, arts. 128, § 4º, II, 132, II, e 134, § 3º)."]);
+  }
   if (input.landRule && !update) {
     qualitative.push(["Q6", "Terreno com obra iniciada até o marco: a data do terreno vale para o art. 18 até 31/12/1988 (IN SRF 84/2001, art. 26, § 1º) e para FR1 e FR2 até 31/12/1995 (IN SRF 599/2005, art. 3º, § 6º). As colunas E, G e J da seção 5 já trazem essas datas."]);
   }
@@ -390,27 +398,47 @@ function buildSheet(ws: Sheet, input: CaseInput, result: CaseResult): Conference
   textRow("Imóvel", `${input.propertyDescription.trim() || "não descrito"}${input.residential ? " (residencial)" : ""}`);
   textRow("Data de aquisição", `${formatDate(input.acquisitionDate)} – ${ACQUISITION_FORM_LABEL[input.acquisitionForm]}`);
   textRow("Data da alienação (contrato)", formatDate(input.contractDate));
-  textRow("Modalidade da venda", SALE_MODE_LABEL[input.saleMode]);
+  if (permuta) textRow("Operação", OPERATION_LABEL[input.operation]);
+  textRow(permuta ? "Forma de recebimento da torna" : "Modalidade da venda", SALE_MODE_LABEL[input.saleMode]);
   textRow("Titularidade", OWNERSHIP_LABEL[input.ownership]);
 
   header([[1, "Ref."], [2, "Valor"], [3, "R$"], [4, "Fundamento legal / observação"]], { 4: LAST_COL });
-  line("V1", "Valor de alienação do imóvel inteiro", input.saleValue, MONEY, "Preço efetivo da operação (Lei 7.713/1988, art. 19).", "input");
+  if (permuta) {
+    line("V1", "Torna recebida (operação inteira)", input.permuta.torna, MONEY,
+      "Diferença recebida em dinheiro: só ela gera ganho (RIR/2018, art. 132, II; Perguntão IRPF 2026, pergunta 632). Quem paga a torna não apura ganho sobre ela.", "input");
+    line("V6", "Valor do imóvel recebido (operação inteira)", input.permuta.receivedValue, MONEY,
+      "Usado só nos limites de pequeno valor e do único imóvel (Perguntão IRPF 2026, pergunta 681).", "input");
+  } else {
+    line("V1", "Valor de alienação do imóvel inteiro", input.saleValue, MONEY, "Preço efetivo da operação (Lei 7.713/1988, art. 19).", "input");
+  }
+  const holderLabel = permuta ? "Torna do titular" : "Valor de alienação do titular";
   if (condominio) {
-    line("V2", "Quota do titular (%)", input.quotaPct, QUOTA, "Condomínio: valor de alienação e custo na parte do titular (IN SRF 84/2001, art. 19, IV).", "input");
-    line("V3", "Valor de alienação do titular", f(`${V("V1")}*${V("V2")}/100`), MONEY, "V1 × V2 ÷ 100.");
+    line("V2", "Quota do titular (%)", input.quotaPct, QUOTA,
+      `Condomínio: ${permuta ? "torna, imóvel recebido" : "valor de alienação"} e custo na parte do titular (IN SRF 84/2001, art. 19, IV).`, "input");
+    line("V3", holderLabel, f(`${V("V1")}*${V("V2")}/100`), MONEY, "V1 × V2 ÷ 100.");
   } else {
     const why =
       input.ownership === "comunhao"
         ? "Bem comum do casamento: o bem inteiro (IN SRF 84/2001, art. 22). O imposto pode ser recolhido 50% em nome de cada cônjuge ou pela totalidade em nome de um deles (art. 30, § 2º)."
         : "Titularidade exclusiva: o bem inteiro.";
-    line("V3", "Valor de alienação do titular", f(V("V1")), MONEY, `= V1. ${why}`);
+    line("V3", holderLabel, f(V("V1")), MONEY, `= V1. ${why}`);
+  }
+  if (permuta) {
+    line("V7", "Valor do imóvel recebido do titular", f(condominio ? `${V("V6")}*${V("V2")}/100` : V("V6")), MONEY,
+      condominio ? "V6 × V2 ÷ 100." : "= V6.");
+    line("V8", "Valor total da operação do titular (torna + imóvel recebido)", f(`${V("V3")}+${V("V7")}`), MONEY,
+      "V3 + V7: valor comparado aos limites de pequeno valor (P3) e do único imóvel (P4) (Perguntão IRPF 2026, pergunta 681).");
+    // The formula refers to KT (section 3) and is written once that row is known.
+    line("VK", "Proporção VK = torna ÷ (custo + torna)", 0, PCT4,
+      "V3 ÷ (KT + V3), sobre os valores do titular; zero sem torna (Perguntão IRPF 2026, pergunta 632; RIR/2018, art. 132, II).");
   }
   if (prazo) {
-    line("V5", "Valor de alienação considerado", f(V("V3")), MONEY,
-      "= V3. Venda a prazo: o valor fica bruto, e a corretagem sai da parcela do mês em que foi paga (IN SRF 84/2001, art. 19, § 4º; seção 9).");
+    line("V5", permuta ? "Torna considerada" : "Valor de alienação considerado", f(V("V3")), MONEY,
+      `= V3. ${permuta ? "Torna a prazo" : "Venda a prazo"}: o valor fica bruto, e a corretagem sai da parcela do mês em que foi paga (IN SRF 84/2001, art. 19, § 4º; seção 9).`);
   } else {
-    line("V4", "Corretagem paga pelo vendedor", input.brokerage, MONEY, "Deduzida do valor de alienação (IN SRF 84/2001, art. 19, § 4º).", "input");
-    line("V5", "Valor de alienação líquido", f(`${V("V3")}-${V("V4")}`), MONEY, "V3 − V4.");
+    line("V4", permuta ? "Corretagem paga pelo titular" : "Corretagem paga pelo vendedor", input.brokerage, MONEY,
+      permuta ? "Deduzida da torna (IN SRF 84/2001, art. 19, § 4º)." : "Deduzida do valor de alienação (IN SRF 84/2001, art. 19, § 4º).", "input");
+    line("V5", permuta ? "Torna líquida" : "Valor de alienação líquido", f(`${V("V3")}-${V("V4")}`), MONEY, "V3 − V4.");
   }
 
   if (update) {
@@ -440,8 +468,10 @@ function buildSheet(ws: Sheet, input: CaseInput, result: CaseResult): Conference
   section("3. CUSTO DE AQUISIÇÃO");
   header([
     [1, "Ref."], [2, "Item"], [3, "Data"], [4, "Valor original"], [5, "Índice do Anexo Único"],
-    [6, "Custo (imóvel inteiro)"], [7, "Custo do titular"], [8, "Observação"],
-  ], { 8: LAST_COL });
+    [6, "Custo (imóvel inteiro)"], [7, "Custo do titular"],
+    ...(permuta ? ([[8, "Custo atribuído à torna (× VK)"], [9, "Observação"]] as [number, string][]) : ([[8, "Observação"]] as [number, string][])),
+  ], permuta ? { 9: LAST_COL } : { 8: LAST_COL });
+  const costNoteCol = permuta ? 9 : 8;
   const rows = costRows(input);
   const costRowAt: number[] = [];
   rows.forEach((cr, index) => {
@@ -484,9 +514,10 @@ function buildSheet(ws: Sheet, input: CaseInput, result: CaseResult): Conference
     // Items are entered for the whole property; the lines of an update are already the holder's.
     const holder = condominio && cr.item ? `${addr(r, 6)}*${V("V2")}/100` : addr(r, 6);
     formulaCell(r, 7, holder, MONEY);
+    if (permuta) formulaCell(r, 8, `${addr(r, 7)}*${V("VK")}`, MONEY);
     if (item && !item.hasDocument) notes.push("Sem documento comprobatório informado: limitação da análise (IN SRF 84/2001, art. 17, I).");
     if (item?.isLand) notes.push("Terreno.");
-    note(r, notes.join(" "), 8);
+    note(r, notes.join(" "), costNoteCol);
     finish(notes.join(" ").length > 80 ? 30 : undefined);
   });
   const firstCost = costRowAt[0];
@@ -496,14 +527,27 @@ function buildSheet(ws: Sheet, input: CaseInput, result: CaseResult): Conference
   put(row, 2, "Custo total do titular", { bold: true, fill: TOTAL_FILL });
   for (let c = 3; c <= 6; c++) ws.getCell(row, c).fill = TOTAL_FILL;
   formulaCell(row, 7, `SUM(${addr(firstCost, 7)}:${addr(lastCost, 7)})`, MONEY, true, TOTAL_FILL);
-  note(row, condominio ? "Itens do imóvel inteiro × quota (V2)." : "Soma da coluna G.", 8);
+  if (permuta) formulaCell(row, 8, `SUM(${addr(firstCost, 8)}:${addr(lastCost, 8)})`, MONEY, true, TOTAL_FILL);
+  note(row, `${condominio ? "Itens do imóvel inteiro × quota (V2)." : "Soma da coluna G."}${permuta ? " Coluna H: custo atribuído à torna, soma de G × VK." : ""}`, costNoteCol);
   finish();
   const totalCost = abs(R.KT, 7);
+  // Cost that goes against the sale value: the whole cost, or in a permuta its share VK.
+  const gainCost = permuta ? abs(R.KT, 8) : totalCost;
+  if (permuta) {
+    ws.getCell(R.VK, 3).value = f(`IF(${totalCost}+${V("V3")}>0,${V("V3")}/(${totalCost}+${V("V3")}),0)`);
+    line("KR", "Custo do imóvel recebido (declaração de bens)", f(`${totalCost}-(${V("V3")}-${V("VK")}*${V("V3")})`), MONEY,
+      "KT − (V3 − VK × V3): custo do imóvel dado menos a torna, mais o ganho da torna pela fórmula, antes da corretagem e das reduções (RIR/2018, art. 128, § 4º, II; Perguntão IRPF 2026, pergunta 632).", "total");
+  }
 
   // ---------------------------------------------------------------- 4. ganho bruto
   section("4. GANHO BRUTO");
-  line("G1", "Ganho bruto", f(`${V("V5")}-${totalCost}`), MONEY,
-    "V5 − KT. Zero ou negativo: sem imposto e sem base negativa (Lei 7.713/1988, art. 3º, § 2º).", "total");
+  if (permuta) {
+    line("G1", "Ganho bruto sobre a torna", f(`MAX(0,${V("V5")}-${gainCost})`), MONEY,
+      "máx(0; V5 − coluna H do KT). Na permuta o ganho não fica negativo: corretagem acima do ganho da torna leva a zero; sem torna, zero (RIR/2018, art. 132, II).", "total");
+  } else {
+    line("G1", "Ganho bruto", f(`${V("V5")}-${totalCost}`), MONEY,
+      "V5 − KT. Zero ou negativo: sem imposto e sem base negativa (Lei 7.713/1988, art. 3º, § 2º).", "total");
+  }
 
   // ---------------------------------------------------------------- 5. reduções
   section("5. REDUÇÕES POR ITEM (ART. 18, FR1 E FR2)");
@@ -520,7 +564,8 @@ function buildSheet(ws: Sheet, input: CaseInput, result: CaseResult): Conference
     put(r, 1, `K${index + 1}`, { bold: true, color: DARK, align: "center" });
     put(r, 2, cr.label, { wrap: true });
     // With a zero total only the first line takes the gain, as the engine's single virtual line.
-    formulaCell(r, 3, `IF(${totalCost}>0,${addr(k, 7)}/${totalCost},${index === 0 ? 1 : 0})`, PCT6);
+    const lineCost = permuta ? addr(k, 8) : addr(k, 7);
+    formulaCell(r, 3, `IF(${gainCost}>0,${lineCost}/${gainCost},${index === 0 ? 1 : 0})`, PCT6);
     formulaCell(r, 4, `IF(${V("G1")}>0,${V("G1")}*${addr(r, 3)},0)`, MONEY);
     inputCell(r, 5, art18Pct, PCT, true);
     formulaCell(r, 6, `${addr(r, 4)}*(1-${addr(r, 5)})`, MONEY);
@@ -550,8 +595,9 @@ function buildSheet(ws: Sheet, input: CaseInput, result: CaseResult): Conference
   header([[1, "Ref."], [2, "Isenção"], [3, "Requisitos atendidos?"], [4, "Fundamento legal / motivo"]], { 4: LAST_COL });
   const { small, single } = result.exemption;
   const reasonText = (reasons: string[]) => (reasons.length > 0 ? ` Motivo: ${reasons.join(" ")}` : " Todos os requisitos atendidos.");
-  line("E1", "Pequeno valor", small.applies ? 1 : 0, FLAG, `IN SRF 599/2005, art. 1º; limite P3.${reasonText(small.reasons)}`, "fill");
-  line("E2", "Único imóvel", single.applies ? 1 : 0, FLAG, `Lei 9.250/1995, art. 23; IN SRF 84/2001, art. 29, I; limite P4.${reasonText(single.reasons)}`, "fill");
+  const totalNote = permuta ? " Na permuta, compara o valor total V8 (Perguntão IRPF 2026, pergunta 681)." : "";
+  line("E1", "Pequeno valor", small.applies ? 1 : 0, FLAG, `IN SRF 599/2005, art. 1º; limite P3.${totalNote}${reasonText(small.reasons)}`, "fill");
+  line("E2", "Único imóvel", single.applies ? 1 : 0, FLAG, `Lei 9.250/1995, art. 23; IN SRF 84/2001, art. 29, I; limite P4.${totalNote}${reasonText(single.reasons)}`, "fill");
   line("E3", "Ganho isento", f(`IF(OR(${V("E1")}=1,${V("E2")}=1),${reducedGain},0)`), MONEY,
     "Se E1 ou E2 = Sim, todo o ganho após reduções (GR) fica isento.");
 
@@ -690,7 +736,7 @@ function buildSheet(ws: Sheet, input: CaseInput, result: CaseResult): Conference
       ws.getCell(R.R1, 3).value = f(`${V("V5")}-${brokerageSum}`);
     }
 
-    line("S1", "Ganho tributável ÷ valor de alienação do titular", f(`IF(${V("V3")}>0,${V("B2")}/${V("V3")},0)`), RATIO,
+    line("S1", permuta ? "Ganho tributável ÷ torna do titular" : "Ganho tributável ÷ valor de alienação do titular", f(`IF(${V("V3")}>0,${V("B2")}/${V("V3")},0)`), RATIO,
       "B2 ÷ V3: ganho da parcela = ganho total ÷ valor total × parcela (IN SRF 84/2001, art. 31; Perguntão, pergunta 668).");
     line("S2", "Imposto ÷ ganho tributável", f(`IF(${V("B2")}>0,${V("B4")}/${V("B2")},0)`), RATIO,
       "B4 ÷ B2: o imposto sai da tabela sobre o ganho total, e cada parcela paga a sua proporção.");
@@ -794,6 +840,7 @@ function buildSheet(ws: Sheet, input: CaseInput, result: CaseResult): Conference
     ["X4", "Imposto a pagar", result.taxPayable, V("B8")],
     ["X5", "Soma do cronograma", scheduleSum, scheduleTotal],
   ];
+  if (permuta && result.permuta) checks.push(["X6", "Custo do imóvel recebido", result.permuta.receivedCost, V("KR")]);
   const conference: ConferenceCells[] = [];
   for (const [ref, label, tool, sheet] of checks) {
     const r = row;

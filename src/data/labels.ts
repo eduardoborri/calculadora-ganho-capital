@@ -1,6 +1,11 @@
 // pt-BR labels shared by the screen, the PDF and the workbook, so the three never disagree.
 
-import type { AcquisitionForm, Ownership, SaleMode } from "../types";
+import type { AcquisitionForm, Operation, Ownership, SaleMode } from "../types";
+
+export const OPERATION_LABEL: Record<Operation, string> = {
+  venda: "Venda",
+  permuta: "Permuta com torna",
+};
 
 export const ACQUISITION_FORM_LABEL: Record<AcquisitionForm, string> = {
   compra: "Compra (ou construção)",

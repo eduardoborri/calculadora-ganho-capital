@@ -4,6 +4,10 @@ Ferramenta interna do Gaia Silva Gaede Advogados - PR (GSGA-PR) para apurar o ga
 
 Os resultados têm caráter consultivo e não substituem a análise individual de cada caso nem o demonstrativo oficial da Receita.
 
+## Permuta com torna
+
+A permuta com torna está no escopo da ferramenta (bloco "Alienação", operação "Permuta com torna"). Informam-se a torna recebida e o valor do imóvel recebido. Só a torna, recebida em dinheiro, gera ganho: o custo do imóvel dado entra na proporção torna ÷ (custo + torna), e a permuta sem torna não gera ganho. O custo do imóvel recebido, para a declaração de bens, é o custo do imóvel dado menos a torna, mais o ganho da torna por essa fórmula. Nos limites de pequeno valor e do único imóvel conta o valor total da operação, torna mais imóvel recebido. Base: Perguntão IRPF 2026, perguntas 632, 634 e 681; RIR/2018, arts. 128, § 4º, II, 132, II, e 134, § 3º. A corretagem na permuta e o limite do único imóvel aparecem como pontos em aberto.
+
 ## Dados e privacidade
 
 - Todo o cálculo roda no navegador. Nenhum dado do caso é enviado para fora da máquina.
@@ -81,3 +85,5 @@ A ferramenta marca estes pontos com o selo "ponto em aberto" na tela, no PDF e n
 4. DARF 4600: citado pelo Perguntão para doação, sem o ato que o institui.
 5. Migração da Lei 14.973 para o Rearp e venda em até 5 anos: tratada como desfazimento do Rearp (IN RFB 2.302/2025, art. 17, não lido por inteiro).
 6. Venda a prazo com corretagem: o ganho é apurado sobre o valor total e a corretagem é deduzida da parcela do mês em que foi paga (IN SRF 84/2001, art. 19, § 4º); o efeito sobre a proporção do ganho por parcela é ponto em aberto.
+7. Permuta com corretagem: a corretagem é deduzida da torna, e a proporção e o custo do imóvel recebido usam a torna bruta; o Perguntão não traz exemplo.
+8. Permuta e isenção do único imóvel: o limite compara o valor total da operação (torna mais imóvel recebido), a leitura conservadora.

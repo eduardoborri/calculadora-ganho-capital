@@ -1,5 +1,5 @@
 import {describe, expect, it} from 'vitest';
-import {EXCESS_DEDUCTION_NOTE, payableNote} from '../src/components/memoLines';
+import {buildMemoLines, EXCESS_DEDUCTION_NOTE, payableNote, receivedCostLine} from '../src/components/memoLines';
 import {calculateCase, defaultCaseInput} from '../src/utils/capitalGain';
 import type {CaseInput, CostItem, PriorPart} from '../src/types';
 
@@ -50,5 +50,37 @@ describe('payableNote', () => {
     const r = calculateCase(input);
     expect(r.status).toBe('ok');
     expect(payableNote(input, r)).toBeNull();
+  });
+});
+
+describe('permuta com torna no memorial', () => {
+  // Perguntao IRPF 2026, question 632; the received value is fictitious.
+  const permuta = caso({
+    acquisitionDate: '1990-10-15',
+    contractDate: '2025-05-05',
+    costItems: [item('dado', '1990-10-15', 60000)],
+    operation: 'permuta',
+    permuta: {torna: 10000, receivedValue: 60000},
+  });
+
+  it('mostra a torna, o custo atribuído e a proporção com quatro casas', () => {
+    const r = calculateCase(permuta);
+    expect(r.status).toBe('ok');
+    const [torna, custo] = buildMemoLines(permuta, r);
+    expect(torna.label).toBe('Torna recebida');
+    expect(torna.value).toContain('10.000,00');
+    expect(custo.label).toBe('Custo atribuído à torna');
+    expect(custo.value).toContain('8.571,43');
+    expect(custo.detail.map((d) => d.value)).toContain('14,2857%');
+    expect(custo.detail.some((d) => d.label === 'Custo total do imóvel dado' && d.value?.includes('60.000,00'))).toBe(true);
+  });
+
+  it('traz o custo do imóvel recebido; a venda não', () => {
+    const r = calculateCase(permuta);
+    expect(receivedCostLine(permuta, r)?.value).toContain('51.428,57');
+    const venda = caso({...permuta, operation: 'venda', saleValue: 70000});
+    const rv = calculateCase(venda);
+    expect(receivedCostLine(venda, rv)).toBeNull();
+    expect(buildMemoLines(venda, rv)[0].label).toBe('Valor de alienação');
   });
 });

@@ -1,7 +1,7 @@
 import { useState } from "react";
 import type { CaseInput, CaseResult } from "../types";
 import { money } from "../utils/format";
-import { buildMemoLines, payableNote, type MemoLine } from "./memoLines";
+import { buildMemoLines, payableNote, receivedCostLine, type MemoLine } from "./memoLines";
 import OutOfScopeNotice from "./OutOfScopeNotice";
 
 interface CalculationMemoProps {
@@ -72,6 +72,8 @@ export default function CalculationMemo({ input, result }: CalculationMemoProps)
   const ok = result.status === "ok";
   const lines = ok ? buildMemoLines(input, result) : [];
   const note = ok ? payableNote(input, result) : null;
+  // Permuta: the cost of the property received comes after the amount payable, apart from it.
+  const received = ok ? receivedCostLine(input, result) : null;
 
   return (
     <aside className="bg-primary text-white rounded-lg p-6 max-sm:p-4 space-y-5 min-w-0" aria-label="Memória de cálculo">
@@ -102,6 +104,16 @@ export default function CalculationMemo({ input, result }: CalculationMemoProps)
               {note && <p className="text-xs text-white/70 mt-2 leading-relaxed">{note}</p>}
             </div>
           </div>
+
+          {received && (
+            <ol className="border-t border-white/20 pt-3">
+              <Line
+                line={received}
+                open={open === received.key}
+                onToggle={() => setOpen(open === received.key ? null : received.key)}
+              />
+            </ol>
+          )}
         </>
       )}
 

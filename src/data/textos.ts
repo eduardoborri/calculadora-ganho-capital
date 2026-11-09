@@ -23,3 +23,7 @@ export const NOTAS_METODOLOGICAS: string[] = [
 // Note of the installment schedule, on screen and in the PDF; the workbook spells it with its cells.
 export const SCHEDULE_NOTE_PRAZO =
   "Uma linha por mês de recebimento. Ganho do mês = razão × (valor recebido − corretagem paga no mês), com razão = ganho total ÷ valor de alienação (IN SRF 84/2001, arts. 19, § 4º, e 31).";
+
+// Premise added to the "Notas metodológicas" of the PDF in a permuta com torna.
+export const NOTA_PERMUTA =
+  "Permuta com torna: só a torna recebida em dinheiro gera ganho, e o custo do imóvel dado entra na proporção torna ÷ (custo + torna); a permuta sem torna não gera ganho. O custo do imóvel recebido é o custo do imóvel dado menos a torna, mais o ganho da torna por essa fórmula. Nos limites de pequeno valor e do único imóvel conta o valor total da operação, torna mais imóvel recebido (Perguntão IRPF 2026, perguntas 632, 634 e 681; RIR/2018, arts. 128, § 4º, II, 132, II, e 134, § 3º).";

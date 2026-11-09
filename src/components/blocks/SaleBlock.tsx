@@ -1,7 +1,7 @@
-import { labelOptions, SALE_MODE_LABEL } from "../../data/labels";
+import { labelOptions, OPERATION_LABEL, SALE_MODE_LABEL } from "../../data/labels";
 import type { Installment, PriorPart, SaleMode } from "../../types";
 import { formatCurrency, formatPercent, round2 } from "../../utils/format";
-import { holderPart } from "../../utils/holder";
+import { holderPart, isPermuta, saleShare } from "../../utils/holder";
 import RowTable, { CellDate, CellMoney } from "../shared/RowTable";
 import { newId } from "../shared/newId";
 import { stackTotalCell, stackTotalRow } from "../shared/styles";
@@ -9,6 +9,7 @@ import type { BlockProps } from "./blockProps";
 import { BlockCard, CheckField, DateField, Field, MoneyField, Segmented } from "./fields";
 
 const MODES = labelOptions(SALE_MODE_LABEL);
+const OPERATIONS = labelOptions(OPERATION_LABEL);
 
 const MODE_HINTS: Record<SaleMode, string> = {
   vista: "Ganho e imposto apurados no mês do contrato.",
@@ -17,6 +18,12 @@ const MODE_HINTS: Record<SaleMode, string> = {
   partes:
     "A partir da segunda operação feita até o fim do ano-calendário seguinte ao da primeira, os ganhos se somam, a tabela vale para o total e o imposto já pago é deduzido.",
 };
+
+// In a permuta "a prazo" means the torna received in installments.
+const PERMUTA_PRAZO_HINT =
+  "Torna recebida em parcelas: ganho apurado como à vista sobre a torna; cada parcela recebida paga a sua proporção do imposto (IN SRF 84/2001, art. 31). A corretagem vai na parcela do mês em que foi paga.";
+
+const PERMUTA_RULE = "Na permuta com torna, o ganho é apurado só sobre a torna: proporção = torna ÷ (custo + torna).";
 
 function InstallmentsTable({ input, onChange }: BlockProps) {
   const rows = input.installments;
@@ -27,8 +34,8 @@ function InstallmentsTable({ input, onChange }: BlockProps) {
 
   return (
     <Field
-      label="Parcelas recebidas (parte do titular)"
-      hint={`Informe só a parte do titular. Valor de alienação do titular: ${formatCurrency(round2(holderPart(input, input.saleValue)))}.`}
+      label={isPermuta(input) ? "Parcelas da torna recebidas (parte do titular)" : "Parcelas recebidas (parte do titular)"}
+      hint={`Informe só a parte do titular. ${isPermuta(input) ? "Torna" : "Valor de alienação"} do titular: ${formatCurrency(round2(saleShare(input)))}.`}
     >
       <RowTable<Installment>
         rows={rows}
@@ -132,49 +139,95 @@ function PriorPartsTable({ input, onChange }: BlockProps) {
   );
 }
 
+// Hint of a whole-property amount in a condominium: the holder's part after the quota.
+function quotaHint(input: BlockProps["input"], amount: number, extra?: string) {
+  const parts: string[] = [];
+  if (extra) parts.push(extra);
+  if (input.ownership === "condominio") {
+    parts.push(
+      `Em condomínio a calculadora aplica a quota de ${formatPercent(input.quotaPct / 100)}: ${formatCurrency(
+        round2(holderPart(input, amount)),
+      )} para o titular.`,
+    );
+  }
+  return parts.length > 0 ? parts.join(" ") : undefined;
+}
+
+// Venda: the sale value. Permuta com torna: the torna received and the value of the property
+// received. Switching the operation keeps every other field, and both sets of values.
+function ValueFields({ input, onChange }: BlockProps) {
+  if (!isPermuta(input)) {
+    return (
+      <MoneyField
+        label="Valor de alienação (imóvel inteiro)"
+        value={input.saleValue}
+        onChange={(saleValue) => onChange({ saleValue })}
+        tooltip="Preço efetivo da operação (Lei 7.713/1988, art. 19)."
+        hint={quotaHint(input, input.saleValue)}
+      />
+    );
+  }
+  const { permuta } = input;
+  return (
+    <>
+      <MoneyField
+        label="Torna recebida (R$)"
+        value={permuta.torna}
+        onChange={(torna) => onChange({ permuta: { ...permuta, torna } })}
+        tooltip="Só a torna é recebida em dinheiro e só ela gera ganho (RIR/2018, art. 132, II; Perguntão IRPF 2026, pergunta 632)."
+        hint={quotaHint(input, permuta.torna, "Diferença recebida em dinheiro. Quem paga a torna não apura ganho sobre ela.")}
+      />
+      <MoneyField
+        label="Valor do imóvel recebido (R$)"
+        value={permuta.receivedValue}
+        onChange={(receivedValue) => onChange({ permuta: { ...permuta, receivedValue } })}
+        hint={quotaHint(input, permuta.receivedValue, "Usado só no limite de pequeno valor e do único imóvel (Perguntão 681).")}
+      />
+    </>
+  );
+}
+
 export default function SaleBlock({ input, onChange }: BlockProps) {
-  const condo = input.ownership === "condominio";
+  const permuta = isPermuta(input);
+  const modeHint = permuta && input.saleMode === "prazo" ? PERMUTA_PRAZO_HINT : MODE_HINTS[input.saleMode];
 
   return (
     <BlockCard title="Alienação">
+      <Field label="Operação">
+        <Segmented value={input.operation} options={OPERATIONS} onChange={(operation) => onChange({ operation })} ariaLabel="Operação" />
+      </Field>
+      {permuta && <p className="notice notice-ok leading-relaxed block">{PERMUTA_RULE}</p>}
+
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <DateField
           label="Data da alienação (contrato)"
           value={input.contractDate}
           onChange={(contractDate) => onChange({ contractDate })}
         />
-        <MoneyField
-          label="Valor de alienação (imóvel inteiro)"
-          value={input.saleValue}
-          onChange={(saleValue) => onChange({ saleValue })}
-          tooltip="Preço efetivo da operação (Lei 7.713/1988, art. 19)."
-          hint={
-            condo
-              ? `Em condomínio a calculadora aplica a quota de ${formatPercent(input.quotaPct / 100)}: ${formatCurrency(
-                  round2(holderPart(input, input.saleValue)),
-                )} para o titular.`
-              : undefined
-          }
-        />
+        <ValueFields input={input} onChange={onChange} />
         {input.saleMode !== "prazo" && (
           <MoneyField
             label="Corretagem paga pelo titular"
             value={input.brokerage}
             onChange={(brokerage) => onChange({ brokerage })}
-            tooltip="Corretagem paga pelo vendedor sai do valor de alienação (IN SRF 84/2001, art. 19, § 4º)."
+            tooltip={
+              permuta
+                ? "Na permuta, a corretagem paga pelo titular sai da torna (IN SRF 84/2001, art. 19, § 4º)."
+                : "Corretagem paga pelo vendedor sai do valor de alienação (IN SRF 84/2001, art. 19, § 4º)."
+            }
             hint="O que o titular pagou; não é ajustada pela quota."
           />
         )}
       </div>
 
       <CheckField
-        label="Venda abaixo do valor de mercado"
+        label={permuta ? "Operação abaixo do valor de mercado" : "Venda abaixo do valor de mercado"}
         checked={input.belowMarket}
         onChange={(belowMarket) => onChange({ belowMarket })}
         tooltip="Gera alerta de risco de arbitramento do valor de alienação (Lei 7.713/1988, art. 20)."
       />
 
-      <Field label="Forma de recebimento" hint={MODE_HINTS[input.saleMode]}>
+      <Field label="Forma de recebimento" hint={modeHint}>
         <Segmented value={input.saleMode} options={MODES} onChange={(saleMode) => onChange(saleMode === "prazo" ? { saleMode, brokerage: 0 } : { saleMode })} ariaLabel="Forma de recebimento" />
       </Field>
 

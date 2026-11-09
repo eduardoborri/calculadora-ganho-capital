@@ -4,10 +4,12 @@ export const formatCurrency = (value: number) =>
     currency: "BRL",
   }).format(value);
 
-export const formatPercent = (value: number) =>
+// Two decimals by default; the permuta proportion uses four (14,2857%).
+export const formatPercent = (value: number, digits = 2) =>
   new Intl.NumberFormat("pt-BR", {
     style: "percent",
-    minimumFractionDigits: 2,
+    minimumFractionDigits: digits,
+    maximumFractionDigits: digits,
   }).format(value);
 
 // "Marina Coelho Leme" → "marina_coelho_leme" (safe file name).

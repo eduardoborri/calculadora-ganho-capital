@@ -20,6 +20,13 @@ function formatSavedAt(iso: string): string {
   return iso && !Number.isNaN(date.getTime()) ? savedAtFormat.format(date) : "—";
 }
 
+// A sale shows its value; a permuta com torna shows "Permuta" and the torna, the amount received.
+function saleCell(entry: HistoryEntry): string {
+  const { input } = entry;
+  if (input.operation === "permuta") return input.permuta.torna > 0 ? `Permuta · torna ${money(input.permuta.torna)}` : "Permuta";
+  return input.saleValue > 0 ? money(input.saleValue) : "—";
+}
+
 function HistoryList({ entries, onOpen, onRemove, onClearAll }: Omit<WelcomeScreenProps, "onStart" | "onResume">) {
   if (entries.length === 0) {
     return <p className="text-sm text-text-gray">Nenhuma simulação salva neste computador.</p>;
@@ -42,7 +49,7 @@ function HistoryList({ entries, onOpen, onRemove, onClearAll }: Omit<WelcomeScre
             {entries.map((entry) => (
               <tr key={entry.id} className={`hover:bg-paper/40 ${stackRow}`}>
                 <td data-label="Salvo em" className={`table-cell ${stackCell} max-sm:col-span-2`}>{formatSavedAt(entry.savedAt)}</td>
-                <td data-label="Valor de alienação" className={`table-cell text-right ${stackCell}`}>{entry.input.saleValue > 0 ? money(entry.input.saleValue) : "—"}</td>
+                <td data-label="Valor de alienação" className={`table-cell text-right ${stackCell}`}>{saleCell(entry)}</td>
                 <td data-label="Data da alienação" className={`table-cell text-right ${stackCell}`}>{entry.input.contractDate ? formatDate(entry.input.contractDate) : "—"}</td>
                 <td className="table-cell max-sm:col-span-2 max-sm:p-0 max-sm:border-0">
                   <div className="flex items-center justify-end gap-3 max-sm:justify-start">

@@ -1,13 +1,13 @@
 import { jsPDF } from "jspdf";
-import { buildMemoLines, payableNote, type MemoLine } from "../components/memoLines";
-import { ACQUISITION_FORM_LABEL, OWNERSHIP_LABEL, SALE_MODE_LABEL } from "../data/labels";
-import { ASPECTOS_GERAIS, NOTAS_METODOLOGICAS, SCHEDULE_NOTE_PRAZO } from "../data/textos";
+import { buildMemoLines, payableNote, receivedCostLine, type MemoLine } from "../components/memoLines";
+import { ACQUISITION_FORM_LABEL, OPERATION_LABEL, OWNERSHIP_LABEL, SALE_MODE_LABEL } from "../data/labels";
+import { ASPECTOS_GERAIS, NOTA_PERMUTA, NOTAS_METODOLOGICAS, SCHEDULE_NOTE_PRAZO } from "../data/textos";
 import type { Alert, CaseInput, CaseResult, ExemptionCheck } from "../types";
 import { correctedCost, usesCostIndex } from "./capitalGain";
 import { filledItems } from "./costItems";
 import { isValidDate, reportYear, todayInBrazil } from "./dates";
 import { formatDate, formatFactor, formatPercent, money, slug } from "./format";
-import { holderPart } from "./holder";
+import { holderPart, isPermuta } from "./holder";
 import { applyValueUpdate } from "./valueUpdate";
 
 /*
@@ -509,6 +509,7 @@ function notesPages(r: Report, input: CaseInput, result: CaseResult, eyebrow: st
   }
   r.subheading("Premissas");
   NOTAS_METODOLOGICAS.forEach((n) => r.bullet(n));
+  if (isPermuta(input)) r.bullet(NOTA_PERMUTA);
 
   r.y += 6;
   r.subheading("Alertas e pontos em aberto");
@@ -558,6 +559,7 @@ function calculationPages(r: Report, input: CaseInput, result: CaseResult, eyebr
   const byKey = new Map(lines.map((l) => [l.key, l]));
   const rows = costRows(input);
   const labelById = new Map(rows.map((c) => [c.id, c.description]));
+  const permuta = isPermuta(input);
 
   // 3.1 Identification and the memo
   r.page({ eyebrow, title: "Apuração do ganho de capital", subtitle: `Memória de cálculo – emitido em ${issued}` });
@@ -586,8 +588,14 @@ function calculationPages(r: Report, input: CaseInput, result: CaseResult, eyebr
       ],
     },
     { cells: ["Data do contrato de alienação", dateOrDash(input.contractDate)] },
-    { cells: ["Modalidade da venda", SALE_MODE_LABEL[input.saleMode]] },
   ];
+  // A sale keeps its identification as before; a permuta names the operation and its values.
+  if (permuta) {
+    ident.push({ cells: ["Operação", OPERATION_LABEL[input.operation]] });
+    ident.push({ cells: ["Torna recebida (operação inteira)", money(input.permuta.torna)] });
+    ident.push({ cells: ["Valor do imóvel recebido (operação inteira)", money(input.permuta.receivedValue)] });
+  }
+  ident.push({ cells: [permuta ? "Forma de recebimento da torna" : "Modalidade da venda", SALE_MODE_LABEL[input.saleMode]] });
   if (input.update) {
     ident.push({
       cells: [
@@ -620,15 +628,28 @@ function calculationPages(r: Report, input: CaseInput, result: CaseResult, eyebr
   r.footnote(`Valores em R$, com duas casas decimais no valor final de cada etapa.${payable ? ` ${payable}` : ""}`);
 
   // 3.2 Sale value and cost
-  r.page({ eyebrow, title: "Valor de alienação e custo", subtitle: "Composição do valor de alienação e dos itens de custo de aquisição" });
+  r.page(
+    permuta
+      ? { eyebrow, title: "Torna e custo", subtitle: "Torna recebida, custo do imóvel dado e custo atribuído à torna" }
+      : { eyebrow, title: "Valor de alienação e custo", subtitle: "Composição do valor de alienação e dos itens de custo de aquisição" }
+  );
   const sale = byKey.get("venda");
   if (sale) {
-    r.subheading("Valor de alienação");
+    r.subheading(permuta ? "Torna recebida" : "Valor de alienação");
     detailTable(r, sale);
   }
-  r.subheading("Custo de aquisição");
+  r.subheading(permuta ? "Custo do imóvel dado e custo atribuído à torna" : "Custo de aquisição");
   const costTable: Row[] = rows.map((c) => ({ cells: [c.description, c.date, c.origin, c.document, money(c.cost)] }));
-  costTable.push({ cells: ["Custo de aquisição", "", "", "", money(result.totalCost)], kind: "total" });
+  if (permuta) {
+    // Same figures as the memo: the holder's total cost of the property given, the proportion
+    // torna / (cost + torna) and the cost that goes against the torna.
+    const given = rows.reduce((sum, c) => sum + c.cost, 0);
+    costTable.push({ cells: ["Custo total do imóvel dado", "", "", "", money(given)], kind: "highlight" });
+    costTable.push({ cells: ["Proporção = torna ÷ (custo + torna)", "", "", "", formatPercent(result.permuta?.proportion ?? 0, 4)] });
+    costTable.push({ cells: ["Custo atribuído à torna", "", "", "", money(result.totalCost)], kind: "total" });
+  } else {
+    costTable.push({ cells: ["Custo de aquisição", "", "", "", money(result.totalCost)], kind: "total" });
+  }
   r.table(
     [
       { label: "Item", width: 250 },
@@ -647,6 +668,12 @@ function calculationPages(r: Report, input: CaseInput, result: CaseResult, eyebr
     );
   }
   r.footnote(costNotes.filter(Boolean).join(" "));
+
+  const received = receivedCostLine(input, result);
+  if (received) {
+    r.subheading(received.label);
+    detailTable(r, received);
+  }
 
   // 3.3 Reductions per cost item
   if (result.items.length > 0) {
@@ -751,6 +778,9 @@ function calculationPages(r: Report, input: CaseInput, result: CaseResult, eyebr
     { cells: ["Imposto a pagar", money(result.taxPayable)], kind: "total" },
   ] as Row[]);
   if (payable) r.footnote(payable);
+  if (received) {
+    r.table(twoCols("Permuta com torna"), [{ cells: [received.label, received.value], kind: "total" }]);
+  }
 
   // 3.5 Schedule
   if (result.schedule.length > 0) {

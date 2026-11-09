@@ -6,7 +6,7 @@ import type { CaseInput, CaseResult, ExemptionCheck, ItemReduction } from "../ty
 import { correctedCost, usesCostIndex } from "../utils/capitalGain";
 import { filledItems } from "../utils/costItems";
 import { formatDate, formatFactor, formatPercent, money, round2 } from "../utils/format";
-import { holderPart } from "../utils/holder";
+import { holderPart, isPermuta, saleShare } from "../utils/holder";
 import { applyValueUpdate } from "../utils/valueUpdate";
 
 export interface MemoDetail {
@@ -54,7 +54,38 @@ function costDetails(input: CaseInput): CostDetail[] {
   });
 }
 
+// Permuta com torna: only the torna is received in money, so it takes the place of the sale value.
+// Without torna nothing is deducted from it (the brokerage stays in the alert).
+function tornaLine(input: CaseInput, result: CaseResult): MemoLine {
+  const { torna } = input.permuta;
+  const detail: MemoDetail[] = [];
+  if (input.ownership === "condominio") {
+    detail.push({ label: "Torna da operação inteira", value: money(torna) });
+    detail.push({ label: `Quota do titular (${formatPercent(input.quotaPct / 100)})`, value: money(holderPart(input, torna)) });
+  } else {
+    detail.push({ label: "Torna recebida", value: money(torna) });
+  }
+  const withTorna = saleShare(input) > 0;
+  if (withTorna && input.saleMode !== "prazo" && input.brokerage > 0) {
+    detail.push({ label: "Corretagem paga pelo titular", value: `− ${money(input.brokerage)}` });
+  }
+  const base = "Só a torna é recebida em dinheiro e só ela gera ganho (RIR/2018, art. 132, II; Perguntão IRPF 2026, pergunta 632).";
+  return {
+    key: "venda",
+    operator: "",
+    label: "Torna recebida",
+    value: money(result.saleNet),
+    detail,
+    note: !withTorna
+      ? `${base} Permuta sem torna: não há ganho a apurar.`
+      : input.saleMode === "prazo"
+        ? `${base} Torna a prazo: o valor fica bruto, e a corretagem sai da parcela do mês em que foi paga (IN SRF 84/2001, art. 19, § 4º).`
+        : `${base} A corretagem paga pelo titular sai da torna (IN SRF 84/2001, art. 19, § 4º).`,
+  };
+}
+
 function saleLine(input: CaseInput, result: CaseResult): MemoLine {
+  if (isPermuta(input)) return tornaLine(input, result);
   const detail: MemoDetail[] = [];
   if (input.ownership === "condominio") {
     detail.push({ label: "Valor do imóvel inteiro", value: money(input.saleValue) });
@@ -78,23 +109,70 @@ function saleLine(input: CaseInput, result: CaseResult): MemoLine {
   };
 }
 
+// Holder's total cost of the property given, before the permuta proportion.
+function givenCost(details: CostDetail[]): number {
+  return details.reduce((sum, d) => sum + d.cost, 0);
+}
+
+// Permuta com torna: the cost of the property given goes against the torna only in the proportion
+// torna / (cost + torna) (Perguntao IRPF 2026, 632).
+function permutaCostLine(result: CaseResult, details: CostDetail[], note: string): MemoLine {
+  const proportion = result.permuta?.proportion ?? 0;
+  return {
+    key: "custo",
+    operator: "−",
+    label: "Custo atribuído à torna",
+    value: money(result.totalCost),
+    detail: [
+      ...details.map((d) => ({ label: d.label, value: money(d.cost) })),
+      { label: "Custo total do imóvel dado", value: money(givenCost(details)) },
+      { label: "Proporção = torna ÷ (custo + torna)", value: formatPercent(proportion, 4) },
+    ],
+    note: `Custo total do imóvel dado × proporção (Perguntão IRPF 2026, pergunta 632). ${note}`,
+  };
+}
+
 function costLine(input: CaseInput, result: CaseResult, details: CostDetail[]): MemoLine {
   const updateNote = input.update
     ? input.update.law === "14973"
       ? "Lei 14.973/2024: CAA mais DTA × percentual pelos meses completos desde a atualização (IN RFB 2.222/2024, art. 12)."
       : "Rearp: custo e data da atualização, ou os originais quando a venda desfaz a adesão (Lei 15.265/2025, art. 7º)."
     : undefined;
+  const note =
+    updateNote ??
+    (input.ownership === "condominio"
+      ? "Itens do imóvel inteiro, na parte do titular. Custo até 31/12/1995 corrigido pelo Anexo Único (IN SRF 84/2001, art. 7º)."
+      : "Custo até 31/12/1995 corrigido pelo Anexo Único (IN SRF 84/2001, art. 7º); depois, sem correção (art. 8º).");
+  if (isPermuta(input)) return permutaCostLine(result, details, note);
   return {
     key: "custo",
     operator: "−",
     label: "Custo de aquisição",
     value: money(result.totalCost),
     detail: details.map((d) => ({ label: d.label, value: money(d.cost) })),
-    note:
-      updateNote ??
-      (input.ownership === "condominio"
-        ? "Itens do imóvel inteiro, na parte do titular. Custo até 31/12/1995 corrigido pelo Anexo Único (IN SRF 84/2001, art. 7º)."
-        : "Custo até 31/12/1995 corrigido pelo Anexo Único (IN SRF 84/2001, art. 7º); depois, sem correção (art. 8º)."),
+    note,
+  };
+}
+
+// Cost of the property received, for the declaration of assets: cost of the property given less
+// the torna, plus the torna's gain by the Perguntao formula (proportion x torna), before brokerage
+// and reductions (RIR/2018, art. 128, par. 4, II; Perguntao IRPF 2026, 632). Shown after the
+// amount payable; null for a sale.
+export function receivedCostLine(input: CaseInput, result: CaseResult): MemoLine | null {
+  if (!isPermuta(input) || !result.permuta) return null;
+  const torna = saleShare(input);
+  const { proportion, receivedCost } = result.permuta;
+  return {
+    key: "custo-recebido",
+    operator: "",
+    label: "Custo do imóvel recebido (declaração de bens)",
+    value: money(receivedCost),
+    detail: [
+      { label: "Custo total do imóvel dado", value: money(givenCost(costDetails(input))) },
+      { label: "Torna do titular", value: `− ${money(torna)}` },
+      { label: `Ganho da torna pela fórmula: ${formatPercent(proportion, 4)} × torna`, value: `+ ${money(proportion * torna)}` },
+    ],
+    note: "Custo do imóvel dado menos a torna, mais o ganho da torna, antes da corretagem e das reduções (RIR/2018, art. 128, § 4º, II; Perguntão IRPF 2026, pergunta 632).",
   };
 }
 
