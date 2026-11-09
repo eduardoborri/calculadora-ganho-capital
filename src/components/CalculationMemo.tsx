@@ -23,7 +23,7 @@ function Line({ line, open, onToggle }: { line: MemoLine; open: boolean; onToggl
         <span className="text-xl font-light text-white/60 text-center" aria-hidden="true">
           {line.operator}
         </span>
-        <span className={`text-sm text-white/85 ${expandable ? "underline decoration-white/25 underline-offset-4" : ""}`}>{line.label}</span>
+        <span className={`text-sm text-white/85 min-w-0 [overflow-wrap:anywhere] ${expandable ? "underline decoration-white/25 underline-offset-4" : ""}`}>{line.label}</span>
         <span className="text-base font-semibold tabular-nums whitespace-nowrap">{line.value}</span>
       </button>
       {open && (
@@ -33,7 +33,7 @@ function Line({ line, open, onToggle }: { line: MemoLine; open: boolean; onToggl
               key={`${d.label}-${index}`}
               className={`flex justify-between gap-3 ${d.heading ? "pt-1.5 font-semibold text-white/90" : ""}`}
             >
-              <span className="leading-snug">{d.label}</span>
+              <span className="leading-snug min-w-0 [overflow-wrap:anywhere]">{d.label}</span>
               {d.value && <span className="tabular-nums whitespace-nowrap">{d.value}</span>}
             </div>
           ))}
@@ -74,7 +74,7 @@ export default function CalculationMemo({ input, result }: CalculationMemoProps)
   const note = ok ? payableNote(input, result) : null;
 
   return (
-    <aside className="bg-primary text-white rounded-lg p-6 space-y-5" aria-label="Memória de cálculo">
+    <aside className="bg-primary text-white rounded-lg p-6 max-sm:p-4 space-y-5 min-w-0" aria-label="Memória de cálculo">
       <h2 className="text-[21px] font-semibold leading-tight">Memória de cálculo</h2>
 
       {!ok && <Pending result={result} />}
@@ -96,9 +96,9 @@ export default function CalculationMemo({ input, result }: CalculationMemoProps)
             <span className="text-2xl font-light text-white/60 text-center" aria-hidden="true">
               =
             </span>
-            <div>
+            <div className="min-w-0">
               <p className="text-sm text-white/85">Imposto a pagar</p>
-              <p className="mt-1 text-[32px] leading-none font-semibold tabular-nums">{money(result.taxPayable)}</p>
+              <p className="mt-1 text-[32px] max-sm:text-[28px] leading-none font-semibold tabular-nums">{money(result.taxPayable)}</p>
               {note && <p className="text-xs text-white/70 mt-2 leading-relaxed">{note}</p>}
             </div>
           </div>

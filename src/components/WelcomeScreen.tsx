@@ -1,6 +1,7 @@
 import { FilePlus, FolderOpen, Trash2 } from "lucide-react";
 import type { HistoryEntry } from "../utils/history";
 import { formatDate, money } from "../utils/format";
+import { stackBody, stackCell, stackHead, stackRow, stackTable } from "./shared/styles";
 
 interface WelcomeScreenProps {
   entries: HistoryEntry[];
@@ -26,8 +27,8 @@ function HistoryList({ entries, onOpen, onRemove, onClearAll }: Omit<WelcomeScre
   return (
     <div className="space-y-3">
       <div className="border border-rule rounded overflow-x-auto">
-        <table className="w-full border-collapse min-w-[520px]">
-          <thead>
+        <table className={`w-full border-collapse min-w-[520px] ${stackTable}`}>
+          <thead className={stackHead}>
             <tr>
               <th className="table-header">Salvo em</th>
               <th className="table-header text-right">Valor de alienação</th>
@@ -37,14 +38,14 @@ function HistoryList({ entries, onOpen, onRemove, onClearAll }: Omit<WelcomeScre
               </th>
             </tr>
           </thead>
-          <tbody>
+          <tbody className={stackBody}>
             {entries.map((entry) => (
-              <tr key={entry.id} className="hover:bg-paper/40">
-                <td className="table-cell">{formatSavedAt(entry.savedAt)}</td>
-                <td className="table-cell text-right">{entry.input.saleValue > 0 ? money(entry.input.saleValue) : "—"}</td>
-                <td className="table-cell text-right">{entry.input.contractDate ? formatDate(entry.input.contractDate) : "—"}</td>
-                <td className="table-cell">
-                  <div className="flex items-center justify-end gap-3">
+              <tr key={entry.id} className={`hover:bg-paper/40 ${stackRow}`}>
+                <td data-label="Salvo em" className={`table-cell ${stackCell} max-sm:col-span-2`}>{formatSavedAt(entry.savedAt)}</td>
+                <td data-label="Valor de alienação" className={`table-cell text-right ${stackCell}`}>{entry.input.saleValue > 0 ? money(entry.input.saleValue) : "—"}</td>
+                <td data-label="Data da alienação" className={`table-cell text-right ${stackCell}`}>{entry.input.contractDate ? formatDate(entry.input.contractDate) : "—"}</td>
+                <td className="table-cell max-sm:col-span-2 max-sm:p-0 max-sm:border-0">
+                  <div className="flex items-center justify-end gap-3 max-sm:justify-start">
                     <button type="button" onClick={() => onOpen(entry)} className="text-action">
                       <FolderOpen className="w-4 h-4" />
                       Abrir

@@ -4,7 +4,7 @@
 import type { ReactNode } from "react";
 import { Plus, Trash2 } from "lucide-react";
 import CurrencyInput from "./CurrencyInput";
-import { cellInput } from "./styles";
+import { cellInput, stackBody, stackCell, stackCellYellow, stackFoot, stackHead, stackRow, stackTable } from "./styles";
 
 export interface RowColumn<T> {
   header: string;
@@ -48,8 +48,8 @@ export default function RowTable<T extends { id: string }>({
   return (
     <div className="space-y-2">
       <div className="border border-rule rounded overflow-x-auto">
-        <table className="w-full border-collapse min-w-[520px]">
-          <thead>
+        <table className={`w-full border-collapse min-w-[520px] ${stackTable}`}>
+          <thead className={stackHead}>
             <tr>
               {columns.map((column) => (
                 <th
@@ -64,25 +64,26 @@ export default function RowTable<T extends { id: string }>({
               </th>
             </tr>
           </thead>
-          <tbody>
+          <tbody className={stackBody}>
             {rows.length === 0 && (
-              <tr>
-                <td className="table-cell text-center text-text-gray py-5" colSpan={columns.length + 1}>
+              <tr className="max-sm:block">
+                <td className="table-cell text-center text-text-gray py-5 max-sm:block" colSpan={columns.length + 1}>
                   {emptyText}
                 </td>
               </tr>
             )}
             {rows.map((row, index) => (
-              <tr key={row.id} className="hover:bg-paper/40">
-                {columns.map((column) => (
+              <tr key={row.id} className={`hover:bg-paper/40 ${stackRow}`}>
+                {columns.map((column, columnIndex) => (
                   <td
                     key={column.header}
-                    className={`table-cell ${column.align === "right" ? "text-right" : ""} ${column.yellow ? "bg-yellow-50" : ""}`}
+                    data-label={column.header}
+                    className={`table-cell ${column.align === "right" ? "text-right" : ""} ${column.yellow ? `bg-yellow-50 ${stackCellYellow}` : stackCell} ${columnIndex === 0 ? "max-sm:col-span-2" : ""}`}
                   >
                     {column.render(row, index)}
                   </td>
                 ))}
-                <td className="table-cell text-center">
+                <td className="table-cell text-center max-sm:col-span-2 max-sm:p-0 max-sm:border-0 max-sm:text-right">
                   <button
                     type="button"
                     onClick={() => onRemove(row.id)}
@@ -95,7 +96,7 @@ export default function RowTable<T extends { id: string }>({
               </tr>
             ))}
           </tbody>
-          {footer && <tfoot>{footer}</tfoot>}
+          {footer && <tfoot className={stackFoot}>{footer}</tfoot>}
         </table>
       </div>
       <button type="button" onClick={onAdd} className="text-action">

@@ -190,9 +190,9 @@ export default function Calculator() {
   const pdfBlockedReason = result.status === "ok" ? null : PDF_BLOCKED_REASON[result.status];
 
   return (
-    <div className="max-w-[1240px] mx-auto px-4 md:px-8 py-8 space-y-8">
-      <header className="flex flex-col lg:flex-row lg:items-end justify-between gap-6">
-        <div>
+    <div className="max-w-[1240px] mx-auto px-4 md:px-8 py-8 max-sm:py-6 space-y-8 min-w-0">
+      <header className="flex flex-col lg:flex-row lg:items-end justify-between gap-6 min-w-0">
+        <div className="min-w-0">
           <img
             src={`${import.meta.env.BASE_URL}brand/gsga-logo.png`}
             alt="Gaia Silva Gaede Advogados"
@@ -200,13 +200,13 @@ export default function Calculator() {
             height={130}
             className="h-9 w-auto mb-5"
           />
-          <h1 className="text-[32px] leading-tight font-semibold text-primary">Calculadora de Ganho de Capital</h1>
+          <h1 className="text-[32px] max-sm:text-[26px] leading-tight font-semibold text-primary">Calculadora de Ganho de Capital</h1>
           <p className="text-text-gray mt-1">GSGA-PR, alienação de imóvel por pessoa física residente</p>
         </div>
         {started && (
-          <div className="flex flex-wrap items-center gap-3">
+          <div className="flex flex-wrap items-center gap-3 max-sm:grid max-sm:grid-cols-2 min-w-0">
             {pdfBlockedReason && (
-              <span id="pdf-blocked-reason" className="text-xs text-text-gray basis-full lg:basis-auto">
+              <span id="pdf-blocked-reason" className="text-xs text-text-gray basis-full lg:basis-auto max-sm:col-span-2">
                 {pdfBlockedReason}
               </span>
             )}
@@ -216,7 +216,7 @@ export default function Calculator() {
               disabled={!ok || pdfStatus.state === "generating"}
               title={pdfBlockedReason ?? "Relatório em PDF com aspectos gerais, notas metodológicas e a memória de cálculo"}
               aria-describedby={pdfBlockedReason ? "pdf-blocked-reason" : undefined}
-              className="btn-outline"
+              className="btn-outline max-sm:justify-center max-sm:text-center"
             >
               <Download className="w-4 h-4" />
               Exportar PDF
@@ -227,16 +227,16 @@ export default function Calculator() {
               disabled={!ok || pdfStatus.state === "generating"}
               title={pdfBlockedReason ?? "Planilha Excel com a memória de cálculo completa, em fórmulas, e a conferência com a ferramenta"}
               aria-describedby={pdfBlockedReason ? "pdf-blocked-reason" : undefined}
-              className="btn-outline"
+              className="btn-outline max-sm:justify-center max-sm:text-center"
             >
               <FileSpreadsheet className="w-4 h-4" />
               Exportar planilha
             </button>
-            <button type="button" onClick={goHome} className="btn-outline">
+            <button type="button" onClick={goHome} className="btn-outline max-sm:justify-center max-sm:text-center">
               <ArrowLeft className="w-4 h-4" />
               Início
             </button>
-            <button type="button" onClick={save} className="btn-filled">
+            <button type="button" onClick={save} className="btn-filled max-sm:justify-center max-sm:text-center">
               <Save className="w-4 h-4" />
               Salvar no histórico
             </button>
@@ -251,7 +251,7 @@ export default function Calculator() {
             notice.kind === "error" ? "border-l-accent" : "border-l-secondary"
           }`}
         >
-          <p className={`flex-1 ${notice.kind === "error" ? "text-accent" : "text-ink"}`}>{notice.text}</p>
+          <p className={`flex-1 min-w-0 [overflow-wrap:anywhere] ${notice.kind === "error" ? "text-accent" : "text-ink"}`}>{notice.text}</p>
           <button type="button" onClick={() => setNotice(null)} aria-label="Fechar aviso" className="text-text-gray hover:text-ink cursor-pointer">
             <X className="w-4 h-4" />
           </button>
@@ -265,7 +265,7 @@ export default function Calculator() {
             pdfStatus.state === "error" ? "border-l-accent" : "border-l-secondary"
           }`}
         >
-          <p className={`flex-1 ${pdfStatus.state === "error" ? "text-accent" : "text-ink"}`}>
+          <p className={`flex-1 min-w-0 [overflow-wrap:anywhere] ${pdfStatus.state === "error" ? "text-accent" : "text-ink"}`}>
             {pdfStatus.state === "generating" && `Gerando ${REPORT_NAME[pdfStatus.kind]}…`}
             {pdfStatus.state === "done" && (
               <>
@@ -320,7 +320,7 @@ export default function Calculator() {
               <ReinvestmentBlock input={input} onChange={onChange} result={result} />
               <ValueUpdateBlock input={input} onChange={onChange} />
             </div>
-            <div className="xl:sticky xl:top-6 xl:max-h-[calc(100vh-3rem)] xl:overflow-y-auto rounded-lg">
+            <div className="min-w-0 xl:sticky xl:top-6 xl:max-h-[calc(100vh-3rem)] xl:overflow-y-auto rounded-lg">
               <CalculationMemo key={session} input={input} result={result} />
             </div>
           </div>

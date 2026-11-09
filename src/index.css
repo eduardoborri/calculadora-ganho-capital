@@ -122,6 +122,20 @@
   .btn-filled {
     @apply flex items-center gap-2 text-sm font-semibold bg-primary text-white px-4 py-2.5 rounded border-2 border-primary hover:bg-primary/90 transition-colors cursor-pointer;
   }
+
+  /* Phone: the cell prints its column name (data-label) above the value. */
+  @media (width < 40rem) {
+    .cell-label[data-label]::before {
+      content: attr(data-label);
+      display: block;
+      margin-bottom: 0.125rem;
+      font-size: 0.75rem;
+      line-height: 1.25;
+      font-weight: 600;
+      color: var(--color-text-gray);
+      text-align: left;
+    }
+  }
 }
 
 :focus-visible {

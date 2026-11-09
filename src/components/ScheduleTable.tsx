@@ -1,5 +1,6 @@
 import type { SaleMode, ScheduleLine } from "../types";
 import { formatDate, money } from "../utils/format";
+import { stackBody, stackCell, stackFoot, stackHead, stackRow, stackTable, stackTotalCell, stackTotalRow } from "./shared/styles";
 
 interface ScheduleTableProps {
   schedule: ScheduleLine[];
@@ -25,8 +26,8 @@ export default function ScheduleTable({ schedule, saleMode }: ScheduleTableProps
       </p>
       <div className="card">
         <div className="overflow-x-auto">
-          <table className="w-full border-collapse min-w-[560px]">
-            <thead>
+          <table className={`w-full border-collapse min-w-[560px] ${stackTable}`}>
+            <thead className={stackHead}>
               <tr>
                 <th className="table-header">Mês</th>
                 <th className="table-header text-right">Valor recebido</th>
@@ -35,25 +36,38 @@ export default function ScheduleTable({ schedule, saleMode }: ScheduleTableProps
                 <th className="table-header text-right">Vencimento</th>
               </tr>
             </thead>
-            <tbody>
+            <tbody className={stackBody}>
               {schedule.map((line) => (
-                <tr key={line.month}>
-                  <td className="table-cell">{formatMonth(line.month)}</td>
-                  <td className="table-cell text-right">{money(line.received)}</td>
-                  <td className="table-cell text-right">{money(line.gain)}</td>
-                  <td className={`table-cell text-right font-semibold ${line.tax > 0 ? "text-accent" : "text-primary"}`}>{money(line.tax)}</td>
-                  <td className="table-cell text-right">{formatDate(line.dueDate)}</td>
+                <tr key={line.month} className={stackRow}>
+                  <td data-label="Mês" className={`table-cell ${stackCell} max-sm:order-1`}>
+                    {formatMonth(line.month)}
+                  </td>
+                  <td data-label="Valor recebido" className={`table-cell text-right ${stackCell} max-sm:order-3`}>
+                    {money(line.received)}
+                  </td>
+                  <td data-label="Ganho do mês" className={`table-cell text-right ${stackCell} max-sm:order-4`}>
+                    {money(line.gain)}
+                  </td>
+                  <td
+                    data-label="Imposto"
+                    className={`table-cell text-right font-semibold ${stackCell} max-sm:order-5 max-sm:col-span-2 ${line.tax > 0 ? "text-accent" : "text-primary"}`}
+                  >
+                    {money(line.tax)}
+                  </td>
+                  <td data-label="Vencimento" className={`table-cell text-right ${stackCell} max-sm:order-2`}>
+                    {formatDate(line.dueDate)}
+                  </td>
                 </tr>
               ))}
             </tbody>
             {schedule.length > 1 && (
-              <tfoot>
-                <tr className="table-total">
-                  <td>Total</td>
-                  <td className="text-right">{money(total((l) => l.received))}</td>
-                  <td className="text-right">{money(total((l) => l.gain))}</td>
-                  <td className="text-right">{money(total((l) => l.tax))}</td>
-                  <td></td>
+              <tfoot className={stackFoot}>
+                <tr className={`table-total ${stackTotalRow}`}>
+                  <td className="max-sm:col-span-2 max-sm:p-0 max-sm:border-0">Total</td>
+                  <td data-label="Valor recebido" className={`text-right ${stackTotalCell}`}>{money(total((l) => l.received))}</td>
+                  <td data-label="Ganho do mês" className={`text-right ${stackTotalCell}`}>{money(total((l) => l.gain))}</td>
+                  <td data-label="Imposto" className={`text-right ${stackTotalCell}`}>{money(total((l) => l.tax))}</td>
+                  <td className="max-sm:hidden"></td>
                 </tr>
               </tfoot>
             )}

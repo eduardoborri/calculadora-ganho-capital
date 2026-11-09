@@ -29,7 +29,7 @@ export function BlockCard({ title, control, collapsed = false, summary, children
       {collapsed ? (
         summary && <p className="text-sm text-text-gray leading-relaxed">{summary}</p>
       ) : (
-        <div className="card p-5 space-y-5">{children}</div>
+        <div className="card p-5 max-sm:p-4 space-y-5">{children}</div>
       )}
     </section>
   );

@@ -15,7 +15,7 @@ import { BlockCard, CheckField } from "./blocks/fields";
 import { isUpTo1995, OriginalRow, ValueCell } from "./CostItemCells";
 import LabelField from "./shared/LabelField";
 import { newId } from "./shared/newId";
-import { cellInput } from "./shared/styles";
+import { cellInput, stackBody, stackCell, stackCellYellow, stackFoot, stackHead, stackRow, stackTable, stackTotalRow } from "./shared/styles";
 import Tooltip from "./shared/Tooltip";
 
 interface CostRowProps {
@@ -29,8 +29,8 @@ function CostRow({ item, landRule, onReplace, onRemove }: CostRowProps) {
   const columns = landRule ? 5 : 4;
   return (
     <Fragment>
-      <tr className="hover:bg-paper/40 align-top">
-        <td className="table-cell">
+      <tr className={`hover:bg-paper/40 align-top ${stackRow} ${isUpTo1995(item) ? "max-sm:border-b-0" : ""}`}>
+        <td data-label="Item" className={`table-cell ${stackCell} max-sm:col-span-2`}>
           <div className="flex items-start">
             <LabelField
               value={item.description}
@@ -39,7 +39,7 @@ function CostRow({ item, landRule, onReplace, onRemove }: CostRowProps) {
             />
           </div>
         </td>
-        <td className="table-cell bg-yellow-50">
+        <td data-label="Data" className={`table-cell bg-yellow-50 ${stackCellYellow}`}>
           <input
             type="date"
             value={item.date}
@@ -48,11 +48,11 @@ function CostRow({ item, landRule, onReplace, onRemove }: CostRowProps) {
             className={cellInput}
           />
         </td>
-        <td className="table-cell bg-yellow-50">
+        <td data-label="Valor (R$)" className={`table-cell bg-yellow-50 ${stackCellYellow}`}>
           <ValueCell item={item} onReplace={onReplace} />
         </td>
         {landRule && (
-          <td className="table-cell text-center">
+          <td data-label="Terreno" className={`table-cell text-center ${stackCell}`}>
             <input
               type="checkbox"
               checked={Boolean(item.isLand)}
@@ -62,7 +62,7 @@ function CostRow({ item, landRule, onReplace, onRemove }: CostRowProps) {
             />
           </td>
         )}
-        <td className="table-cell text-center">
+        <td data-label="Documento" className={`table-cell text-center ${stackCell}`}>
           <input
             type="checkbox"
             checked={item.hasDocument}
@@ -71,7 +71,7 @@ function CostRow({ item, landRule, onReplace, onRemove }: CostRowProps) {
             className="w-4 h-4 accent-primary"
           />
         </td>
-        <td className="table-cell text-center">
+        <td className="table-cell text-center max-sm:col-span-2 max-sm:p-0 max-sm:border-0 max-sm:text-right">
           <button
             type="button"
             onClick={onRemove}
@@ -116,8 +116,8 @@ export default function CostTable({ input, onChange }: BlockProps) {
       />
 
       <div className="border border-rule rounded overflow-x-auto">
-        <table className="w-full border-collapse min-w-[680px]">
-          <thead>
+        <table className={`w-full border-collapse min-w-[680px] ${stackTable}`}>
+          <thead className={stackHead}>
             <tr>
               <th className="table-header">Item</th>
               <th className="table-header w-40">
@@ -135,10 +135,10 @@ export default function CostTable({ input, onChange }: BlockProps) {
               </th>
             </tr>
           </thead>
-          <tbody>
+          <tbody className={stackBody}>
             {input.costItems.length === 0 && (
-              <tr>
-                <td className="table-cell text-center text-text-gray py-5" colSpan={input.landRule ? 6 : 5}>
+              <tr className="max-sm:block">
+                <td className="table-cell text-center text-text-gray py-5 max-sm:block" colSpan={input.landRule ? 6 : 5}>
                   Nenhum item de custo. Sem custo, todo o ganho usa a data de aquisição do imóvel.
                 </td>
               </tr>
@@ -153,17 +153,17 @@ export default function CostTable({ input, onChange }: BlockProps) {
               />
             ))}
           </tbody>
-          <tfoot>
-            <tr className="table-total">
-              <td colSpan={2}>Total do imóvel inteiro</td>
-              <td className="text-right tabular-nums">{formatCurrency(round2(total))}</td>
-              <td colSpan={input.landRule ? 3 : 2}></td>
+          <tfoot className={stackFoot}>
+            <tr className={`table-total ${stackTotalRow}`}>
+              <td colSpan={2} className="max-sm:p-0 max-sm:border-0">Total do imóvel inteiro</td>
+              <td className="text-right tabular-nums max-sm:p-0 max-sm:border-0">{formatCurrency(round2(total))}</td>
+              <td colSpan={input.landRule ? 3 : 2} className="max-sm:hidden"></td>
             </tr>
             {condo && (
-              <tr className="table-total">
-                <td colSpan={2}>Parte do titular ({formatPercent(input.quotaPct / 100)})</td>
-                <td className="text-right tabular-nums">{formatCurrency(round2(holderPart(input, total)))}</td>
-                <td colSpan={input.landRule ? 3 : 2}></td>
+              <tr className={`table-total ${stackTotalRow}`}>
+                <td colSpan={2} className="max-sm:p-0 max-sm:border-0">Parte do titular ({formatPercent(input.quotaPct / 100)})</td>
+                <td className="text-right tabular-nums max-sm:p-0 max-sm:border-0">{formatCurrency(round2(holderPart(input, total)))}</td>
+                <td colSpan={input.landRule ? 3 : 2} className="max-sm:hidden"></td>
               </tr>
             )}
           </tfoot>

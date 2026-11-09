@@ -95,9 +95,9 @@ export function OriginalRow({ item, onReplace, colSpan }: { item: CostItem; onRe
   };
 
   return (
-    <tr className="bg-paper/40">
-      <td></td>
-      <td className="px-4 pb-3 pt-1 text-xs text-text-gray" colSpan={colSpan}>
+    <tr className="bg-paper/40 max-sm:block max-sm:border-b max-sm:border-rule/60 max-sm:last:border-b-0">
+      <td className="max-sm:hidden"></td>
+      <td className="px-4 pb-3 pt-1 text-xs text-text-gray max-sm:block" colSpan={colSpan}>
         <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
           <span className="font-semibold text-primary">Custo até {formatDate(COST_INDEX_END)}:</span>
           {options.length === 0 ? (

@@ -3,6 +3,7 @@ import { formatCurrency, formatPercent, round2 } from "../../utils/format";
 import { holderPart } from "../../utils/holder";
 import RowTable, { CellDate, CellMoney } from "../shared/RowTable";
 import { newId } from "../shared/newId";
+import { stackTotalCell, stackTotalRow } from "../shared/styles";
 import type { BlockProps } from "./blockProps";
 import { BlockCard, CheckField, DateField, Field, MoneyField, Segmented } from "./fields";
 
@@ -69,11 +70,11 @@ function InstallmentsTable({ input, onChange }: BlockProps) {
         ]}
         footer={
           rows.length > 0 && (
-            <tr className="table-total">
-              <td>Total</td>
-              <td className="text-right tabular-nums">{formatCurrency(round2(total))}</td>
-              <td className="text-right tabular-nums">{formatCurrency(round2(brokerage))}</td>
-              <td></td>
+            <tr className={`table-total ${stackTotalRow}`}>
+              <td className="max-sm:col-span-2 max-sm:p-0 max-sm:border-0">Total</td>
+              <td data-label="Valor recebido" className={`text-right tabular-nums ${stackTotalCell}`}>{formatCurrency(round2(total))}</td>
+              <td data-label="Corretagem paga no mês" className={`text-right tabular-nums ${stackTotalCell}`}>{formatCurrency(round2(brokerage))}</td>
+              <td className="max-sm:hidden"></td>
             </tr>
           )
         }
