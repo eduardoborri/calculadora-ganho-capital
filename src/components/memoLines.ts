@@ -6,6 +6,7 @@ import { COST_INDEX_END } from "../constants";
 import type { CaseInput, CaseResult, ExemptionCheck, ItemReduction } from "../types";
 import { correctedCost } from "../utils/capitalGain";
 import { filledItems } from "../utils/costItems";
+import { isValidDate } from "../utils/dates";
 import { formatDate, formatFactor, formatPercent, money } from "../utils/format";
 import { holderPart } from "../utils/holder";
 import { applyValueUpdate } from "../utils/valueUpdate";
@@ -44,8 +45,9 @@ function costDetails(input: CaseInput): CostDetail[] {
     }));
   }
   return filledItems(input).map((item) => {
-    const corrected = Boolean(item.original) && !item.manual && item.date <= COST_INDEX_END;
-    const tag = item.manual ? ", valor manual" : corrected ? ", corrigido pelo Anexo Único" : "";
+    // Same condition as the engine's correction: an item up to 31/12/1995 with an original amount.
+    const indexed = Boolean(item.original) && isValidDate(item.date) && item.date <= COST_INDEX_END;
+    const tag = !indexed ? "" : item.manual ? ", valor manual" : ", corrigido pelo Anexo Único";
     return {
       id: item.id,
       label: `${item.description.trim() || "Item sem descrição"} (${formatDate(item.date)}${tag})`,

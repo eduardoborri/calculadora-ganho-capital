@@ -51,8 +51,8 @@ function Pending({ result }: { result: CaseResult }) {
     <div className="space-y-3">
       <p className="text-sm text-white/85">{invalid ? "Corrija os dados abaixo para calcular:" : "Para calcular, preencha:"}</p>
       <ul className="space-y-1.5 text-sm list-disc pl-5 leading-snug">
-        {result.missing.map((message) => (
-          <li key={message}>{message}</li>
+        {result.missing.map((message, index) => (
+          <li key={index}>{message}</li>
         ))}
       </ul>
     </div>

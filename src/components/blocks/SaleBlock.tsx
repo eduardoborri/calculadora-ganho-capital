@@ -177,7 +177,7 @@ export default function SaleBlock({ input, onChange }: BlockProps) {
       />
 
       <Field label="Forma de recebimento" hint={MODE_HINTS[input.saleMode]}>
-        <Segmented value={input.saleMode} options={MODES} onChange={(saleMode) => onChange({ saleMode })} ariaLabel="Forma de recebimento" />
+        <Segmented value={input.saleMode} options={MODES} onChange={(saleMode) => onChange(saleMode === "prazo" ? { saleMode, brokerage: 0 } : { saleMode })} ariaLabel="Forma de recebimento" />
       </Field>
 
       {input.saleMode === "prazo" && <InstallmentsTable input={input} onChange={onChange} />}

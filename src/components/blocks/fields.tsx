@@ -3,11 +3,11 @@
 
 import type { ReactNode } from "react";
 import CurrencyInput from "../shared/CurrencyInput";
+import { cellInput } from "../shared/styles";
 import Tooltip from "../shared/Tooltip";
 
 export const fieldBox =
   "flex items-center gap-2 px-3 py-2 bg-yellow-50 border border-yellow-200 rounded focus-within:ring-2 focus-within:ring-secondary/40";
-export const cellInput = "w-full min-w-0 bg-transparent border-none focus:ring-0 p-0 text-primary font-semibold text-sm";
 
 interface BlockCardProps {
   title: string;

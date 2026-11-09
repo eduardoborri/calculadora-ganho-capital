@@ -9,11 +9,10 @@ import { correctedCost } from "../utils/capitalGain";
 import { isValidDate } from "../utils/dates";
 import { formatDate, round2 } from "../utils/format";
 import CurrencyInput from "./shared/CurrencyInput";
+import { cellInput } from "./shared/styles";
 
 // Index as printed in the Anexo Único (up to 4 decimals).
 const indexFormat = new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 4 });
-
-export const cellInput = "w-full min-w-0 bg-transparent border-none focus:ring-0 p-0 text-primary font-semibold text-sm";
 
 export const isUpTo1995 = (item: CostItem) => isValidDate(item.date) && item.date <= COST_INDEX_END;
 
@@ -87,8 +86,9 @@ export function OriginalRow({ item, onReplace, colSpan }: { item: CostItem; onRe
   const setMoeda = (moeda: string) =>
     onReplace(moeda ? { ...item, original: { amount: item.original?.amount ?? 0, moeda: moeda as Moeda } } : withoutOriginal(item));
   const setAmount = (amount: number) => {
+    // Zero keeps a chosen currency (the amount may come later); "Sem valor original" removes it.
     if (amount === 0) {
-      if (item.original) onReplace(withoutOriginal(item));
+      if (item.original && item.original.amount !== 0) onReplace({ ...item, original: { ...item.original, amount: 0 } });
       return;
     }
     onReplace({ ...item, original: { amount, moeda: item.original?.moeda ?? options[0] } });

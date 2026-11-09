@@ -4,6 +4,7 @@
 import type { ReactNode } from "react";
 import { Plus, Trash2 } from "lucide-react";
 import CurrencyInput from "./CurrencyInput";
+import { cellInput } from "./styles";
 
 export interface RowColumn<T> {
   header: string;
@@ -25,8 +26,6 @@ interface RowTableProps<T extends { id: string }> {
   // Total row, rendered as the table footer.
   footer?: ReactNode;
 }
-
-const cellInput = "w-full min-w-0 bg-transparent border-none focus:ring-0 p-0 text-primary font-semibold text-sm";
 
 export function CellMoney({ value, onChange, label }: { value: number; onChange: (v: number) => void; label: string }) {
   return <CurrencyInput value={value} onChange={onChange} ariaLabel={label} className={`${cellInput} text-right`} />;

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import { useEffect, useState, type ChangeEvent } from "react";
 
 interface CurrencyInputProps {
   value: number;
@@ -33,7 +33,7 @@ export default function CurrencyInput({
     setDisplayValue(formatDisplay(fixedValue));
   };
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleChange = (e: ChangeEvent<HTMLInputElement>) => {
     const val = e.target.value;
     // Allow numbers, dots, and commas, but strip other characters (like currency symbols or spaces) to facilitate pasting
     const cleanedValue = val.replace(/[^0-9.,]/g, "");

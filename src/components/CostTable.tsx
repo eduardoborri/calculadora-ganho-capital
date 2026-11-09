@@ -12,9 +12,10 @@ import { formatCurrency, formatPercent, round2 } from "../utils/format";
 import { holderPart } from "../utils/holder";
 import type { BlockProps } from "./blocks/blockProps";
 import { BlockCard, CheckField } from "./blocks/fields";
-import { cellInput, isUpTo1995, OriginalRow, ValueCell } from "./CostItemCells";
+import { isUpTo1995, OriginalRow, ValueCell } from "./CostItemCells";
 import LabelField from "./shared/LabelField";
 import { newId } from "./shared/newId";
+import { cellInput } from "./shared/styles";
 import Tooltip from "./shared/Tooltip";
 
 interface CostRowProps {

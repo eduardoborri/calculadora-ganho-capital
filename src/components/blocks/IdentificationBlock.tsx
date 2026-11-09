@@ -1,6 +1,7 @@
 import type { OutOfScope } from "../../types";
 import type { BlockProps } from "./blockProps";
-import { BlockCard, CheckField, Field, TextField, cellInput, fieldBox } from "./fields";
+import { cellInput } from "../shared/styles";
+import { BlockCard, CheckField, Field, TextField, fieldBox } from "./fields";
 
 const OUT_OF_SCOPE_OPTIONS: { value: OutOfScope; label: string }[] = [
   { value: "nao_residente", label: "Alienante não residente no Brasil" },
