@@ -1,0 +1,19 @@
+node_modules/
+build/
+dist/
+coverage/
+.DS_Store
+*.log
+.env*
+!.env.example
+
+# Client data must never be committed: spreadsheets, declarations and
+# input files.
+*.xlsx
+*.xls
+*.pdf
+dados*.json
+__pycache__/
+
+# Local planning notes
+.superpowers/

@@ -233,7 +233,7 @@ Nesta tarefa `calculateCase` cobre validação, escopo, venda à vista, custo e 
 
 **Interfaces:**
 - Consumes: Tarefas 2 a 5.
-- Produces: `law14973Percent(months: number): number`; `applyValueUpdate(input): { costItems: CostItem[]; gainOverride: number | null; deductFromTax: number; alerts: Alert[] }`; `buildAlerts(input, partial: CaseResult): Alert[]`.
+- Produces: `law14973Percent(months: number): number`; `applyValueUpdate(input): { costItems: CostItem[]; deductFromTax: number; alerts: Alert[] }`; `buildAlerts(input, partial: CaseResult): Alert[]`.
 
 - [ ] **Step 1: Escreva os testes:**
   - Caso 15: venda 2.000.000, CAA 500.000, DTA 1.000.000, 50 meses: `law14973Percent(50) === 0.16` e GK 1.340.000.
