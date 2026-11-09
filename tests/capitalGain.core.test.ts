@@ -9,6 +9,7 @@ import {
   factorFR1,
   factorFR2,
   progressiveTax,
+  usesCostIndex,
 } from '../src/utils/capitalGain';
 import {formatFactor, round2} from '../src/utils/format';
 import type {CaseInput, CostItem} from '../src/types';
@@ -593,5 +594,25 @@ describe('defaults until the next tasks', () => {
     expect(r.schedule).toHaveLength(1);
     expect(r.priorTaxPaid).toBe(0);
     expect(r.taxPayable).toBe(r.taxDue);
+  });
+});
+
+describe('usesCostIndex', () => {
+  const original = {amount: 10000, moeda: 'Reais' as const};
+
+  it('an item up to 31/12/1995 with an original amount uses the Anexo Unico', () => {
+    expect(usesCostIndex(item('compra', '1995-12-31', 0, {original}))).toBe(true);
+  });
+
+  it('a manual value, a later date, no original amount or an invalid date do not', () => {
+    expect(usesCostIndex(item('compra', '1995-12-10', 1, {original, manual: true}))).toBe(false);
+    expect(usesCostIndex(item('compra', '1996-01-01', 1, {original}))).toBe(false);
+    expect(usesCostIndex(item('compra', '1995-12-10', 1))).toBe(false);
+    expect(usesCostIndex(item('compra', '1995-02-30', 1, {original}))).toBe(false);
+  });
+
+  it('with manual cleared it tells whether the item has the Anexo Unico default', () => {
+    const typed = item('compra', '1995-12-10', 1, {original, manual: true});
+    expect(usesCostIndex({...typed, manual: false})).toBe(true);
   });
 });

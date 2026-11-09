@@ -39,23 +39,20 @@ function rearpLines(update: ValueUpdate, reversal: boolean): CostItem[] {
   return [virtualLine("atualizacao-rearp", "CAA + DTA", update.date, update.caa + update.dta)];
 }
 
-// Expects validated dates. gainOverride stays null: the virtual lines give GK by themselves. It is
-// kept for the interface of the plan.
+// Expects validated dates. The virtual lines give GK by themselves.
 export function applyValueUpdate(input: CaseInput): {
   costItems: CostItem[];
-  gainOverride: number | null;
   deductFromTax: number;
   alerts: Alert[];
 } {
   const {update, contractDate} = input;
-  if (!update) return {costItems: input.costItems, gainOverride: null, deductFromTax: 0, alerts: []};
+  if (!update) return {costItems: input.costItems, deductFromTax: 0, alerts: []};
 
   if (update.law === "14973") {
     const months = completedMonths(update.date, contractDate);
     const percent = law14973Percent(months);
     return {
       costItems: law14973Lines(update, percent),
-      gainOverride: null,
       deductFromTax: 0,
       alerts: [...law14973Alerts(months, percent), ...updateInputAlerts(input, false)],
     };
@@ -65,7 +62,6 @@ export function applyValueUpdate(input: CaseInput): {
   const reversal = isRearpReversal(update, contractDate);
   return {
     costItems: rearpLines(update, reversal),
-    gainOverride: null,
     deductFromTax: reversal ? update.taxPaidSelic : 0,
     alerts: [...rearpAlerts(input, withinLock, reversal), ...updateInputAlerts(input, reversal)],
   };

@@ -2,12 +2,10 @@
 // status "ok". Pure: the component only lays them out. Amounts go through money()
 // (formatCurrency of round2), factors through formatFactor (6 decimals).
 
-import { COST_INDEX_END } from "../constants";
 import type { CaseInput, CaseResult, ExemptionCheck, ItemReduction } from "../types";
-import { correctedCost } from "../utils/capitalGain";
+import { correctedCost, usesCostIndex } from "../utils/capitalGain";
 import { filledItems } from "../utils/costItems";
-import { isValidDate } from "../utils/dates";
-import { formatDate, formatFactor, formatPercent, money } from "../utils/format";
+import { formatDate, formatFactor, formatPercent, money, round2 } from "../utils/format";
 import { holderPart } from "../utils/holder";
 import { applyValueUpdate } from "../utils/valueUpdate";
 
@@ -46,7 +44,7 @@ function costDetails(input: CaseInput): CostDetail[] {
   }
   return filledItems(input).map((item) => {
     // Same condition as the engine's correction: an item up to 31/12/1995 with an original amount.
-    const indexed = Boolean(item.original) && isValidDate(item.date) && item.date <= COST_INDEX_END;
+    const indexed = usesCostIndex({ ...item, manual: false });
     const tag = !indexed ? "" : item.manual ? ", valor manual" : ", corrigido pelo Anexo Único";
     return {
       id: item.id,
@@ -235,7 +233,7 @@ export function buildMemoLines(input: CaseInput, result: CaseResult): MemoLine[]
 }
 
 // How the amount payable relates to the tax of the table, per sale mode.
-export function payableNote(input: CaseInput, result: CaseResult): string | null {
+function modeNote(input: CaseInput, result: CaseResult): string | null {
   if (input.saleMode === "prazo") {
     return "Venda a prazo: soma das linhas do cronograma. Cada parcela informada paga a sua proporção do imposto (IN SRF 84/2001, art. 31).";
   }
@@ -244,4 +242,14 @@ export function payableNote(input: CaseInput, result: CaseResult): string | null
   }
   if (result.priorTaxPaid > 0) return "Imposto da tabela menos a dedução do Rearp desfeito.";
   return null;
+}
+
+export const EXCESS_DEDUCTION_NOTE =
+  "O imposto a pagar não fica abaixo de zero, e o excesso da dedução não é restituído por esta apuração.";
+
+// Compared in cents, as shown: a deduction above the tax of the table adds the excess sentence.
+export function payableNote(input: CaseInput, result: CaseResult): string | null {
+  const note = modeNote(input, result);
+  if (round2(result.priorTaxPaid) <= round2(result.taxDue)) return note;
+  return note ? `${note} ${EXCESS_DEDUCTION_NOTE}` : EXCESS_DEDUCTION_NOTE;
 }

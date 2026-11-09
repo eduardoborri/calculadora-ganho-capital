@@ -56,6 +56,13 @@ export function isValidDate(date: string): boolean {
   return /^\d{4}-\d{2}-\d{2}$/.test(date) && addDays(date, 0) === date;
 }
 
+// Calendar year of the report: the typed one, or the year of the contract when none was typed
+// (0). Without either it stays 0.
+export function reportYear(calendarYear: number, contractDate: string): number {
+  if (calendarYear > 0) return calendarYear;
+  return isValidDate(contractDate) ? Number(contractDate.slice(0, 4)) : 0;
+}
+
 // Easter Sunday (Anonymous Gregorian algorithm), returned as ISO date.
 function easter(year: number): string {
   const a = year % 19;

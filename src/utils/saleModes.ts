@@ -119,8 +119,22 @@ export function settleTax(input: CaseInput, gain: number): ReturnType<typeof app
   return applyPriorParts(input.saleMode === "partes" ? input : {...input, priorParts: []}, gain);
 }
 
-// Alerts of this module. Task 6 merges them into its builder.
+// Prior parts typed but all outside the window: this operation is taxed on its own.
+function priorPartsOutsideAlerts(input: CaseInput): Alert[] {
+  if (input.saleMode !== "partes" || input.priorParts.length === 0 || summedPriorParts(input).length > 0) return [];
+  return [
+    {
+      id: "partes-fora-do-prazo",
+      level: "info",
+      text: "Partes anteriores fora do prazo do art. 21, § 3º, da Lei 8.981: apuração própria desta operação.",
+      legal: "Lei 8.981/1995, art. 21, § 3º",
+    },
+  ];
+}
+
+// Alerts of this module, merged by buildAlerts.
 export function saleModeAlerts(input: CaseInput, taxableGain: number): Alert[] {
+  if (input.saleMode === "partes") return priorPartsOutsideAlerts(input);
   if (input.saleMode !== "prazo") return [];
   const alerts: Alert[] = [];
 

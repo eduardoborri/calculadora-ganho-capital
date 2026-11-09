@@ -19,3 +19,7 @@ export const NOTAS_METODOLOGICAS: string[] = [
   "Imposto pela tabela progressiva, por faixa, de 15% a 22,5% sobre a base final (Lei 8.981/1995, art. 21).",
   "A apuração considera apenas os dados e documentos informados. A ausência de documento representa limitação da análise, e não prova de fato contrário.",
 ];
+
+// Note of the installment schedule, on screen and in the PDF; the workbook spells it with its cells.
+export const SCHEDULE_NOTE_PRAZO =
+  "Uma linha por mês de recebimento. Ganho do mês = razão × (valor recebido − corretagem paga no mês), com razão = ganho total ÷ valor de alienação (IN SRF 84/2001, arts. 19, § 4º, e 31).";

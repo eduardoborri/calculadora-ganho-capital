@@ -1,6 +1,6 @@
 import {afterEach, describe, expect, it, vi} from 'vitest';
 import {ASPECTOS_GERAIS} from '../src/data/textos';
-import {reportFileName} from '../src/utils/pdfReport';
+import {isAssetResponse, reportFileName} from '../src/utils/pdfReport';
 
 describe('reportFileName', () => {
   afterEach(() => {
@@ -39,5 +39,21 @@ describe('ASPECTOS_GERAIS', () => {
   it('opens and closes with the approved text', () => {
     expect(ASPECTOS_GERAIS[0].startsWith('O ganho de capital na alienação de imóveis por pessoa física residente no Brasil')).toBe(true);
     expect(ASPECTOS_GERAIS[4].endsWith('a declaração nem a análise individual de cada caso.')).toBe(true);
+  });
+});
+
+describe('isAssetResponse', () => {
+  const response = (ok: boolean, type: string | null) => ({ok, headers: {get: () => type}});
+
+  it('accepts a font or an image', () => {
+    expect(isAssetResponse(response(true, 'font/ttf'))).toBe(true);
+    expect(isAssetResponse(response(true, 'image/png'))).toBe(true);
+    expect(isAssetResponse(response(true, null))).toBe(true);
+  });
+
+  it('refuses the index.html served with 200 for a missing asset, and an error status', () => {
+    expect(isAssetResponse(response(true, 'text/html; charset=utf-8'))).toBe(false);
+    expect(isAssetResponse(response(true, 'Text/HTML'))).toBe(false);
+    expect(isAssetResponse(response(false, 'font/ttf'))).toBe(false);
   });
 });

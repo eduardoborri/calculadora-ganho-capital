@@ -5,7 +5,7 @@ import { RotateCcw } from "lucide-react";
 import { COST_INDEX_END } from "../constants";
 import { costIndex, currenciesFor, type Moeda } from "../data/custoAte1995";
 import type { CostItem } from "../types";
-import { correctedCost } from "../utils/capitalGain";
+import { correctedCost, usesCostIndex } from "../utils/capitalGain";
 import { isValidDate } from "../utils/dates";
 import { formatDate, round2 } from "../utils/format";
 import CurrencyInput from "./shared/CurrencyInput";
@@ -36,7 +36,7 @@ function withoutOriginal(item: CostItem): CostItem {
 }
 
 export function ValueCell({ item, onReplace }: { item: CostItem; onReplace: (item: CostItem) => void }) {
-  const corrected = isUpTo1995(item) && Boolean(item.original);
+  const corrected = usesCostIndex({ ...item, manual: false });
   if (!corrected) {
     return (
       <CurrencyInput

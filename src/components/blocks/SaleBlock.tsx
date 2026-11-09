@@ -1,3 +1,4 @@
+import { labelOptions, SALE_MODE_LABEL } from "../../data/labels";
 import type { Installment, PriorPart, SaleMode } from "../../types";
 import { formatCurrency, formatPercent, round2 } from "../../utils/format";
 import { holderPart } from "../../utils/holder";
@@ -7,11 +8,7 @@ import { stackTotalCell, stackTotalRow } from "../shared/styles";
 import type { BlockProps } from "./blockProps";
 import { BlockCard, CheckField, DateField, Field, MoneyField, Segmented } from "./fields";
 
-const MODES: { value: SaleMode; label: string }[] = [
-  { value: "vista", label: "À vista" },
-  { value: "prazo", label: "A prazo" },
-  { value: "partes", label: "Em partes" },
-];
+const MODES = labelOptions(SALE_MODE_LABEL);
 
 const MODE_HINTS: Record<SaleMode, string> = {
   vista: "Ganho e imposto apurados no mês do contrato.",
@@ -72,8 +69,8 @@ function InstallmentsTable({ input, onChange }: BlockProps) {
           rows.length > 0 && (
             <tr className={`table-total ${stackTotalRow}`}>
               <td className="max-sm:col-span-2 max-sm:p-0 max-sm:border-0">Total</td>
-              <td data-label="Valor recebido" className={`text-right tabular-nums ${stackTotalCell}`}>{formatCurrency(round2(total))}</td>
-              <td data-label="Corretagem paga no mês" className={`text-right tabular-nums ${stackTotalCell}`}>{formatCurrency(round2(brokerage))}</td>
+              <td data-label="Valor recebido (R$)" className={`text-right tabular-nums ${stackTotalCell}`}>{formatCurrency(round2(total))}</td>
+              <td data-label="Corretagem paga no mês (R$)" className={`text-right tabular-nums ${stackTotalCell}`}>{formatCurrency(round2(brokerage))}</td>
               <td className="max-sm:hidden"></td>
             </tr>
           )

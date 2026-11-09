@@ -10,10 +10,12 @@ import {
   TAX_BRACKETS,
 } from "../constants";
 import { costIndex } from "../data/custoAte1995";
-import type { AcquisitionForm, CaseInput, CaseResult, CostItem, ItemReduction, Ownership, SaleMode } from "../types";
-import { art18Percent, countM1, countM2 } from "./capitalGain";
+import { ACQUISITION_FORM_LABEL, OWNERSHIP_LABEL, SALE_MODE_LABEL } from "../data/labels";
+import type { CaseInput, CaseResult, CostItem, ItemReduction } from "../types";
+import { art18Percent, countM1, countM2, usesCostIndex } from "./capitalGain";
 import { filledItems } from "./costItems";
-import { completedMonths, isValidDate, lastBusinessDayOfNextMonth, todayInBrazil } from "./dates";
+import { completedMonths, isValidDate, lastBusinessDayOfNextMonth, reportYear, todayInBrazil } from "./dates";
+import { isApplicationCounted } from "./exemptions";
 import { formatDate } from "./format";
 import { reportFileName } from "./pdfReport";
 import { summedPriorParts } from "./saleModes";
@@ -126,19 +128,6 @@ const NOTE_COL = 14;
 const WIDTHS = [7, 42, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 44];
 const COL = "ABCDEFGHIJKLMN";
 
-const FORM_LABEL: Record<AcquisitionForm, string> = {
-  compra: "Compra",
-  heranca: "Herança",
-  legado: "Legado",
-  doacao_adiantamento: "Doação em adiantamento da legítima",
-  dissolucao: "Dissolução da sociedade conjugal",
-};
-const MODE_LABEL: Record<SaleMode, string> = { vista: "À vista", prazo: "A prazo", partes: "Em partes" };
-const OWNERSHIP_LABEL: Record<Ownership, string> = {
-  exclusivo: "Exclusiva",
-  condominio: "Condomínio",
-  comunhao: "Bem comum do casamento",
-};
 const LEVEL_LABEL: Record<string, string> = {
   info: "Informação",
   aviso: "Aviso",
@@ -171,9 +160,9 @@ interface CostRow {
 
 const isoMonth = (iso: string) => `${iso.slice(5, 7)}/${iso.slice(0, 4)}`;
 
-// Same conditions as the engine's correctedCost: an item up to 31/12/1995 with an original amount.
+// Same condition as the engine's correctedCost: an item up to 31/12/1995 with an original amount.
 function itemKind(item: CostItem): CostKind {
-  const old = Boolean(item.original) && isValidDate(item.date) && item.date <= COST_INDEX_END;
+  const old = usesCostIndex({ ...item, manual: false });
   if (!old) return "plain";
   return item.manual ? "manual" : "indexed";
 }
@@ -395,11 +384,13 @@ function buildSheet(ws: Sheet, input: CaseInput, result: CaseResult): Conference
   // ---------------------------------------------------------------- 2. dados
   section("2. DADOS DO CASO");
   textRow("Contribuinte", input.taxpayerName.trim() || "não informado");
-  if (input.calendarYear) textRow("Ano-calendário", String(input.calendarYear));
+  // Without a typed year the contract year is used, as in the PDF.
+  const year = reportYear(input.calendarYear, input.contractDate);
+  if (year) textRow("Ano-calendário", String(year));
   textRow("Imóvel", `${input.propertyDescription.trim() || "não descrito"}${input.residential ? " (residencial)" : ""}`);
-  textRow("Data de aquisição", `${formatDate(input.acquisitionDate)} – ${FORM_LABEL[input.acquisitionForm]}`);
+  textRow("Data de aquisição", `${formatDate(input.acquisitionDate)} – ${ACQUISITION_FORM_LABEL[input.acquisitionForm]}`);
   textRow("Data da alienação (contrato)", formatDate(input.contractDate));
-  textRow("Modalidade da venda", MODE_LABEL[input.saleMode]);
+  textRow("Modalidade da venda", SALE_MODE_LABEL[input.saleMode]);
   textRow("Titularidade", OWNERSHIP_LABEL[input.ownership]);
 
   header([[1, "Ref."], [2, "Valor"], [3, "R$"], [4, "Fundamento legal / observação"]], { 4: LAST_COL });
@@ -576,13 +567,7 @@ function buildSheet(ws: Sheet, input: CaseInput, result: CaseResult): Conference
     input.reinvestment.applications.forEach((app, index) => {
       const r = row;
       appRows.push(r);
-      const inside =
-        deadline !== null &&
-        isValidDate(app.date) &&
-        app.date >= input.contractDate &&
-        app.date <= deadline &&
-        Number.isFinite(app.value) &&
-        app.value > 0;
+      const inside = isApplicationCounted(input, app, deadline);
       put(r, 1, `A${index + 1}`, { bold: true, color: DARK, align: "center" });
       put(r, 2, app.kind === "quitacao" ? "Quitação de financiamento" : "Aquisição de imóvel residencial", { wrap: true });
       put(r, 3, isValidDate(app.date) ? formatDate(app.date) : "sem data", { align: "center" });

@@ -219,7 +219,8 @@ function write(store: Storage, entries: HistoryEntry[]): void {
   store.setItem(HISTORY_KEY, JSON.stringify(entries));
 }
 
-// Newest first, capped at 50. The client name is blanked: it never persists.
+// Newest first, capped at 50. The client name and the property description are blanked: they may
+// identify the client and never persist.
 export function saveEntry(input: CaseInput, storage?: Storage): boolean {
   try {
     const store = resolveStorage(storage);
@@ -227,7 +228,7 @@ export function saveEntry(input: CaseInput, storage?: Storage): boolean {
     const entry: HistoryEntry = {
       id: newId(),
       savedAt: new Date().toISOString(),
-      input: {...input, taxpayerName: ""},
+      input: {...input, taxpayerName: "", propertyDescription: ""},
     };
     write(store, [entry, ...loadHistory(store)].slice(0, MAX_ENTRIES));
     return true;

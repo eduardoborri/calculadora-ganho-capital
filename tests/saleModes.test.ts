@@ -541,3 +541,31 @@ describe('validation of prior parts', () => {
     expect(calculateCase(caso({...partes, contractDate: '2016-01-10', priorParts: same})).status).toBe('ok');
   });
 });
+
+describe('prior parts outside the window', () => {
+  const outside = 'partes-fora-do-prazo';
+
+  it('informs that this operation is taxed on its own', () => {
+    const alerts = saleModeAlerts(caso({...partes, priorParts: [parte('a', '2023-02-10', 100000, 15000)]}), 0);
+    const alert = alerts.find((a) => a.id === outside);
+    expect(alert?.level).toBe('info');
+    expect(alert?.text).toBe(
+      'Partes anteriores fora do prazo do art. 21, § 3º, da Lei 8.981: apuração própria desta operação.',
+    );
+    expect(alert?.legal).toContain('Lei 8.981/1995, art. 21, § 3º');
+  });
+
+  it('says nothing with parts inside the window, without parts or in another mode', () => {
+    const ids = (input: CaseInput) => saleModeAlerts(input, 0).map((a) => a.id);
+    expect(ids(caso({...partes, priorParts: [parte('a', '2024-02-10', 100000, 15000)]}))).not.toContain(outside);
+    expect(ids(caso({...partes, priorParts: []}))).not.toContain(outside);
+    expect(ids(caso({...base, priorParts: [parte('a', '2023-02-10', 100000, 15000)]}))).not.toContain(outside);
+  });
+
+  it('reaches the result through calculateCase', () => {
+    const r = calculateCase(caso({...partes, costItems: custo, priorParts: [parte('a', '2023-02-10', 100000, 15000)]}));
+    expect(r.status).toBe('ok');
+    expect(r.alerts.map((a) => a.id)).toContain(outside);
+    expect(r.priorTaxPaid).toBe(0);
+  });
+});

@@ -1,6 +1,12 @@
 import {describe, expect, it} from 'vitest';
 import {calculateCase, defaultCaseInput, progressiveTax} from '../src/utils/capitalGain';
-import {checkSingleProperty, checkSmallValue, reinvestmentOutcome} from '../src/utils/exemptions';
+import {
+  checkSingleProperty,
+  checkSmallValue,
+  isApplicationCounted,
+  reinvestmentDeadline,
+  reinvestmentOutcome,
+} from '../src/utils/exemptions';
 import type {Application, CaseInput} from '../src/types';
 
 function caso(partial: Partial<CaseInput>): CaseInput {
@@ -382,5 +388,39 @@ describe('fix round 1', () => {
     }
     const off = reinv({enabled: false, applications: [app('a', '2026-01-10', -1)]});
     expect(calculateCase(caso({...ready, reinvestment: off})).status).toBe('ok');
+  });
+});
+
+describe('reinvestment deadline and counted applications', () => {
+  it('the deadline is the 180th day from the contract, or from the first contract with several sales', () => {
+    expect(reinvestmentDeadline(caso({...base, reinvestment: reinv({})}))).toBe('2026-04-08');
+    const several = reinv({moreThanOneSale: true, firstContractDate: '2025-09-10'});
+    expect(reinvestmentDeadline(caso({...base, reinvestment: several}))).toBe('2026-03-09');
+    const blank = reinv({moreThanOneSale: true, firstContractDate: ' '});
+    expect(reinvestmentDeadline(caso({...base, reinvestment: blank}))).toBe('2026-04-08');
+    const ignored = reinv({moreThanOneSale: false, firstContractDate: '2025-09-10'});
+    expect(reinvestmentDeadline(caso({...base, reinvestment: ignored}))).toBe('2026-04-08');
+    expect(reinvestmentDeadline(caso({contractDate: '', reinvestment: reinv({})}))).toBeNull();
+  });
+
+  it('counts only dated applications with value between the contract and the deadline', () => {
+    const input = caso({...base, reinvestment: reinv({})});
+    const deadline = reinvestmentDeadline(input);
+    expect(isApplicationCounted(input, app('a', '2025-10-10', 1), deadline)).toBe(true);
+    expect(isApplicationCounted(input, app('a', '2026-04-08', 1), deadline)).toBe(true);
+    expect(isApplicationCounted(input, app('a', '2026-04-09', 1), deadline)).toBe(false);
+    expect(isApplicationCounted(input, app('a', '2025-10-09', 1), deadline)).toBe(false);
+    expect(isApplicationCounted(input, app('a', '', 1), deadline)).toBe(false);
+    expect(isApplicationCounted(input, app('a', '2025-11-10', 0), deadline)).toBe(false);
+    expect(isApplicationCounted(input, app('a', '2025-11-10', 1), null)).toBe(false);
+  });
+
+  it('the outcome sums exactly the counted applications', () => {
+    const apps = [app('a', '2025-11-10', 100), app('b', '2026-04-09', 1000), app('c', '2026-01-10', 10, 'quitacao')];
+    const input = caso({...base, reinvestment: reinv({applications: apps})});
+    const deadline = reinvestmentDeadline(input);
+    const counted = apps.filter((a) => isApplicationCounted(input, a, deadline)).reduce((sum, a) => sum + a.value, 0);
+    expect(reinvestmentOutcome(input, 1000000).applied).toBe(counted);
+    expect(counted).toBe(110);
   });
 });

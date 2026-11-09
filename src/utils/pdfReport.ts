@@ -1,11 +1,11 @@
 import { jsPDF } from "jspdf";
 import { buildMemoLines, payableNote, type MemoLine } from "../components/memoLines";
-import { COST_INDEX_END } from "../constants";
-import { ASPECTOS_GERAIS, NOTAS_METODOLOGICAS } from "../data/textos";
-import type { AcquisitionForm, Alert, CaseInput, CaseResult, ExemptionCheck, Ownership, SaleMode } from "../types";
-import { correctedCost } from "./capitalGain";
+import { ACQUISITION_FORM_LABEL, OWNERSHIP_LABEL, SALE_MODE_LABEL } from "../data/labels";
+import { ASPECTOS_GERAIS, NOTAS_METODOLOGICAS, SCHEDULE_NOTE_PRAZO } from "../data/textos";
+import type { Alert, CaseInput, CaseResult, ExemptionCheck } from "../types";
+import { correctedCost, usesCostIndex } from "./capitalGain";
 import { filledItems } from "./costItems";
-import { isValidDate, todayInBrazil } from "./dates";
+import { isValidDate, reportYear, todayInBrazil } from "./dates";
 import { formatDate, formatFactor, formatPercent, money, slug } from "./format";
 import { holderPart } from "./holder";
 import { applyValueUpdate } from "./valueUpdate";
@@ -55,9 +55,15 @@ export function reportFileName(name: string, ext: "pdf" | "xlsx"): string {
 }
 
 // ------------------------------------------------------------------ assets
+// A missing asset on Cloudflare Pages comes back as index.html with status 200: an HTML answer is
+// a failure too, so the Helvetica fallback takes over.
+export function isAssetResponse(res: { ok: boolean; headers: { get(name: string): string | null } }): boolean {
+  return res.ok && !(res.headers.get("content-type") ?? "").toLowerCase().includes("text/html");
+}
+
 async function fetchBase64(path: string): Promise<string> {
   const res = await fetch(`${import.meta.env.BASE_URL}${path}`);
-  if (!res.ok) throw new Error(`${path}: ${res.status}`);
+  if (!isAssetResponse(res)) throw new Error(`${path}: ${res.status} ${res.headers.get("content-type") ?? ""}`);
   const bytes = new Uint8Array(await res.arrayBuffer());
   let binary = "";
   for (let i = 0; i < bytes.length; i += 0x8000) binary += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
@@ -391,26 +397,6 @@ class Report {
 }
 
 // ------------------------------------------------------------------ labels
-const FORM_LABEL: Record<AcquisitionForm, string> = {
-  compra: "Compra (ou construção)",
-  heranca: "Herança",
-  legado: "Legado",
-  doacao_adiantamento: "Doação em adiantamento da legítima",
-  dissolucao: "Dissolução da sociedade conjugal (partilha)",
-};
-
-const OWNERSHIP_LABEL: Record<Ownership, string> = {
-  exclusivo: "Exclusivo",
-  condominio: "Condomínio",
-  comunhao: "Comunhão (casamento)",
-};
-
-const MODE_LABEL: Record<SaleMode, string> = {
-  vista: "À vista",
-  prazo: "A prazo",
-  partes: "Em partes",
-};
-
 const LEVEL_LABEL: Record<Alert["level"], string> = {
   aberto: "Ponto em aberto",
   risco: "Risco",
@@ -449,7 +435,7 @@ function costRows(input: CaseInput): CostRow[] {
     }));
   }
   return filledItems(input).map((item) => {
-    const indexed = Boolean(item.original) && isValidDate(item.date) && item.date <= COST_INDEX_END;
+    const indexed = usesCostIndex({ ...item, manual: false });
     const description = item.description.trim() || "Item sem descrição";
     return {
       id: item.id,
@@ -486,7 +472,9 @@ export function buildPdfReport(params: PdfReportParams, files: ReportFiles): Gen
   const today = todayInBrazil();
   const issued = formatDate(today);
   const name = input.taxpayerName.trim();
-  const eyebrow = [name || "Ganho de capital · Imóveis", `Ano-calendário ${input.calendarYear}`].join(" · ");
+  // Without a typed year the contract year is used (validated: status "ok").
+  const year = reportYear(input.calendarYear, input.contractDate);
+  const eyebrow = [name || "Ganho de capital · Imóveis", `Ano-calendário ${year}`].join(" · ");
 
   // 1. General aspects
   r.page(
@@ -584,10 +572,10 @@ function calculationPages(r: Report, input: CaseInput, result: CaseResult, eyebr
 
   const ident: Row[] = [
     { cells: ["Contribuinte", input.taxpayerName.trim() || "Não informado"] },
-    { cells: ["Ano-calendário", String(input.calendarYear)] },
+    { cells: ["Ano-calendário", String(reportYear(input.calendarYear, input.contractDate))] },
     { cells: ["Imóvel", input.propertyDescription.trim() || "Não informado"] },
     { cells: ["Imóvel residencial", yesNo(input.residential)] },
-    { cells: ["Forma de aquisição", FORM_LABEL[input.acquisitionForm]] },
+    { cells: ["Forma de aquisição", ACQUISITION_FORM_LABEL[input.acquisitionForm]] },
     { cells: ["Data de aquisição", dateOrDash(input.acquisitionDate)] },
     {
       cells: [
@@ -598,7 +586,7 @@ function calculationPages(r: Report, input: CaseInput, result: CaseResult, eyebr
       ],
     },
     { cells: ["Data do contrato de alienação", dateOrDash(input.contractDate)] },
-    { cells: ["Modalidade da venda", MODE_LABEL[input.saleMode]] },
+    { cells: ["Modalidade da venda", SALE_MODE_LABEL[input.saleMode]] },
   ];
   if (input.update) {
     ident.push({
@@ -790,7 +778,7 @@ function calculationPages(r: Report, input: CaseInput, result: CaseResult, eyebr
     r.footnote(
       `${
         input.saleMode === "prazo"
-          ? "Uma linha por mês de recebimento. Ganho do mês = ganho total ÷ valor de alienação × valor recebido, menos a corretagem paga no mês (IN SRF 84/2001, art. 31)."
+          ? SCHEDULE_NOTE_PRAZO
           : "Imposto do mês do contrato."
       } Vencimento no último dia útil do mês seguinte, considerados os feriados nacionais.`
     );

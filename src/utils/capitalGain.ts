@@ -111,8 +111,9 @@ export function countM2(acquisition: string, sale: string): number {
 // ---- Cost ----
 
 // An item up to 31/12/1995 with an original amount is updated by the Anexo Unico index, unless
-// the user typed a value over the default. Later costs are never corrected.
-function usesCostIndex(item: CostItem): boolean {
+// the user typed a value over the default. Later costs are never corrected. Reports and screen ask
+// usesCostIndex({...item, manual: false}) to know whether the item has the Anexo Unico default.
+export function usesCostIndex(item: CostItem): boolean {
   return Boolean(item.original) && !item.manual && isValidDate(item.date) && item.date <= COST_INDEX_END;
 }
 

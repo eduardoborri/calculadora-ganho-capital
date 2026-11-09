@@ -249,6 +249,18 @@ describe('sale modes', () => {
     expect(ids(run({brokerage: 5000}))).not.toContain('prazo-corretagem-ignorada');
   });
 
+  it('installment brokerage is an open point with its citation', () => {
+    const withBrokerage = {...prazo, installments: [{id: 'a', date: '2025-10-15', value: 1000000, brokerage: 30000}]};
+    const alert = find(run(withBrokerage), 'prazo-corretagem-proporcao');
+    expect(alert?.level).toBe('aberto');
+    expect(alert?.text).toBe(
+      'Na venda a prazo, o ganho é apurado sobre o valor total e a corretagem é deduzida da parcela do mês em que foi paga (IN SRF 84/2001, art. 19, § 4º). O efeito sobre a proporção do ganho por parcela é ponto em aberto.',
+    );
+    expect(alert?.legal).toBe('IN SRF 84/2001, art. 19, § 4º');
+    expect(ids(run(prazo))).not.toContain('prazo-corretagem-proporcao');
+    expect(ids(run({brokerage: 30000}))).not.toContain('prazo-corretagem-proporcao');
+  });
+
   it('the alerts of the sale modes are merged', () => {
     const r = run({...prazo, installments: [{id: 'a', date: '2025-10-15', value: 900000, brokerage: 0}]});
     expect(find(r, 'parcelas-diferenca')?.legal).toBeTruthy();
@@ -278,6 +290,21 @@ describe('sale modes', () => {
       );
       expect(ids(run({priorParts: part('2025-02-10', 100000)}))).not.toContain('partes-diferenca-anterior');
     });
+  });
+});
+
+describe('calendar year', () => {
+  it('a typed year other than the contract year is informed', () => {
+    const alert = find(run({calendarYear: 2026}), 'ano-calendario-divergente');
+    expect(alert?.level).toBe('info');
+    expect(alert?.text).toContain('(2026)');
+    expect(alert?.text).toContain('(2025)');
+    expect(alert?.legal.trim()).not.toBe('');
+  });
+
+  it('the contract year or no typed year says nothing', () => {
+    expect(ids(run({calendarYear: 2025}))).not.toContain('ano-calendario-divergente');
+    expect(ids(run({calendarYear: 0}))).not.toContain('ano-calendario-divergente');
   });
 });
 

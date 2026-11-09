@@ -6,7 +6,7 @@ import {
   SINGLE_PROPERTY_LOCK_YEARS,
   SMALL_VALUE_LIMIT,
 } from "../constants";
-import type {CaseInput, CaseResult, ExemptionCheck} from "../types";
+import type {Application, CaseInput, CaseResult, ExemptionCheck} from "../types";
 import {addDays, addYears, isValidDate} from "./dates";
 import {money} from "./format";
 import {saleShare} from "./holder";
@@ -67,22 +67,38 @@ export function checkSingleProperty(input: CaseInput): ExemptionCheck {
   return {applies: reasons.length === 0, reasons};
 }
 
+// Art. 39 deadline, the 180th day. Only with several sales does it count from the first contract;
+// empty, it counts from this sale. Null without a valid start date.
+export function reinvestmentDeadline(input: CaseInput): string | null {
+  const {moreThanOneSale, firstContractDate} = input.reinvestment;
+  const first = moreThanOneSale ? firstContractDate.trim() : "";
+  const start = first || input.contractDate;
+  return isValidDate(start) ? addDays(start, REINVESTMENT_DAYS) : null;
+}
+
+// Both kinds (acquisition and settlement of financing) count. Undated ones, ones before this
+// sale's contract, late ones and ones without a positive value do not.
+export function isApplicationCounted(input: CaseInput, app: Application, deadline: string | null): boolean {
+  return (
+    deadline !== null &&
+    isValidDate(app.date) &&
+    app.date >= input.contractDate &&
+    app.date <= deadline &&
+    Number.isFinite(app.value) &&
+    app.value > 0
+  );
+}
+
 // Reinvestment (Lei 11.196/2005, art. 39). `proceeds` is the sale net of brokerage.
 export function reinvestmentOutcome(input: CaseInput, proceeds: number): CaseResult["reinvestment"] {
   const {reinvestment} = input;
   if (!reinvestment.enabled) return {deadline: null, applied: 0, proceeds, taxedShare: 1};
 
-  // Only with several sales does the deadline count from the first contract.
-  const first = reinvestment.moreThanOneSale ? reinvestment.firstContractDate.trim() : "";
-  const start = first || input.contractDate;
-  if (!isValidDate(start)) return {deadline: null, applied: 0, proceeds, taxedShare: 1};
-  const deadline = addDays(start, REINVESTMENT_DAYS);
+  const deadline = reinvestmentDeadline(input);
+  if (deadline === null) return {deadline: null, applied: 0, proceeds, taxedShare: 1};
 
-  // Both kinds (acquisition and settlement of financing) count. Undated ones, ones before this
-  // sale's contract and late ones do not.
   const applied = reinvestment.applications
-    .filter((app) => isValidDate(app.date) && app.date >= input.contractDate && app.date <= deadline)
-    .filter((app) => Number.isFinite(app.value) && app.value > 0)
+    .filter((app) => isApplicationCounted(input, app, deadline))
     .reduce((sum, app) => sum + app.value, 0);
 
   const benefit = input.residential && !reinvestment.usedInLast5Years && !reinvestment.landOrGarage;

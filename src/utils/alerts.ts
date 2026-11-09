@@ -77,6 +77,14 @@ function rearpDateAlert(update: ValueUpdate): Alert {
 export function rearpAlerts(input: CaseInput, withinLock: boolean, reversal: boolean): Alert[] {
   const {update} = input;
   const alerts: Alert[] = [reversal ? rearpReversalAlert(input, update) : rearpDateAlert(update)];
+  if (reversal && update.migratedFrom14973) {
+    alerts.push({
+      id: "rearp-migracao-prazo",
+      level: "aberto",
+      text: "Migração da Lei 14.973 para o Rearp com venda em até 5 anos: tratada como desfazimento do Rearp. O art. 17 da IN RFB 2.302/2025 não foi lido por inteiro.",
+      legal: "IN RFB 2.302/2025, art. 17",
+    });
+  }
   if (withinLock && !reversal) {
     alerts.push({
       id: "rearp-excecao",
@@ -172,6 +180,22 @@ function marketAlerts(input: CaseInput): Alert[] {
   ];
 }
 
+// The typed calendar year should be the year of the sale; 0 means none typed (the reports then use
+// the contract year).
+function calendarYearAlerts(input: CaseInput): Alert[] {
+  if (input.calendarYear <= 0 || !isValidDate(input.contractDate)) return [];
+  const contractYear = Number(input.contractDate.slice(0, 4));
+  if (input.calendarYear === contractYear) return [];
+  return [
+    {
+      id: "ano-calendario-divergente",
+      level: "info",
+      text: `O ano-calendário informado (${input.calendarYear}) difere do ano do contrato de alienação (${contractYear}). O ganho é apurado na data da alienação; os relatórios mostram o ano informado: confirme-o.`,
+      legal: "Lei 7.713/1988, art. 3º, § 2º",
+    },
+  ];
+}
+
 function projectiveAlerts(input: CaseInput, today: string): Alert[] {
   if (input.contractDate <= today) return [];
   return [
@@ -194,6 +218,14 @@ function installmentAlerts(input: CaseInput): Alert[] {
       legal: "IN SRF 84/2001, art. 19, § 3º",
     },
   ];
+  if (input.installments.some((installment) => installment.brokerage > 0)) {
+    alerts.push({
+      id: "prazo-corretagem-proporcao",
+      level: "aberto",
+      text: "Na venda a prazo, o ganho é apurado sobre o valor total e a corretagem é deduzida da parcela do mês em que foi paga (IN SRF 84/2001, art. 19, § 4º). O efeito sobre a proporção do ganho por parcela é ponto em aberto.",
+      legal: "IN SRF 84/2001, art. 19, § 4º",
+    });
+  }
   if (input.brokerage > 0) {
     alerts.push({
       id: "prazo-corretagem-ignorada",
@@ -358,7 +390,8 @@ function ownershipAlerts(input: CaseInput): Alert[] {
   ];
 }
 
-// ---- Open points (spec 5.1). The one on installments is in saleModeAlerts ----
+// ---- Open points (spec 5.1). Installments: the tax rate is in saleModeAlerts, the brokerage in
+// installmentAlerts ----
 
 // A count below the full one means the line starts after Dec/2005, whatever date it took.
 function m2Alerts(input: CaseInput, partial: CaseResult): Alert[] {
@@ -398,6 +431,7 @@ export function buildAlerts(input: CaseInput, partial: CaseResult, today: string
     ...costAlerts(input),
     ...transferAlerts(input),
     ...ownershipAlerts(input),
+    ...calendarYearAlerts(input),
     ...projectiveAlerts(input, today),
     ...m2Alerts(input, partial),
     ...darfAlerts(partial),

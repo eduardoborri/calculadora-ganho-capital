@@ -42,14 +42,16 @@ function caso(partial: Partial<CaseInput> = {}): CaseInput {
 }
 
 describe('histórico', () => {
-  it('grava sem o nome do contribuinte', () => {
+  it('grava sem o nome do contribuinte e sem a descrição do imóvel', () => {
     const s = fakeStorage();
-    expect(saveEntry(caso({propertyDescription: 'Apto fictício'}), s)).toBe(true);
+    expect(saveEntry(caso({propertyDescription: 'Apto fictício', saleValue: 123456}), s)).toBe(true);
     const list = loadHistory(s);
     expect(list).toHaveLength(1);
     expect(list[0].input.taxpayerName).toBe('');
-    expect(list[0].input.propertyDescription).toBe('Apto fictício');
+    expect(list[0].input.propertyDescription).toBe('');
+    expect(list[0].input.saleValue).toBe(123456);
     expect(s.getItem(HISTORY_KEY)).not.toContain('Fulano');
+    expect(s.getItem(HISTORY_KEY)).not.toContain('Apto fictício');
     expect(Number.isNaN(Date.parse(list[0].savedAt))).toBe(false);
   });
 

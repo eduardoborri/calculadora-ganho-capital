@@ -7,8 +7,8 @@ Os resultados têm caráter consultivo e não substituem a análise individual d
 ## Dados e privacidade
 
 - Todo o cálculo roda no navegador. Nenhum dado do caso é enviado para fora da máquina.
-- O histórico de simulações fica no `localStorage` do navegador daquela máquina. Ele guarda valores e datas; o nome do contribuinte nunca é gravado. O botão "Excluir" apaga uma simulação e "Limpar tudo" apaga todas.
-- O nome do contribuinte digitado na tela aparece apenas nos relatórios (PDF e planilha) gerados na hora.
+- O histórico de simulações fica no `localStorage` do navegador daquela máquina. Ele guarda valores e datas; nome e descrição não são gravados (o nome do contribuinte e a descrição do imóvel ficam em branco ao reabrir). O botão "Excluir" apaga uma simulação e "Limpar tudo" apaga todas.
+- O nome do contribuinte e a descrição do imóvel digitados na tela aparecem apenas nos relatórios (PDF e planilha) gerados na hora.
 - Não use dados reais de clientes em testes, exemplos ou capturas de tela.
 
 ## Estrutura de `src/`
@@ -53,7 +53,7 @@ npm run dev
 
 ## Como testar no StackBlitz
 
-1. Abra o repositório no StackBlitz pelo SHA do commit que quer conferir (a URL do projeto no GitHub com o SHA no lugar do branch), para testar exatamente aquele estado.
+1. Abra o repositório no StackBlitz pelo SHA do commit que quer conferir, para testar exatamente aquele estado: `https://stackblitz.com/github/eduardoborri/calculadora-ganho-capital/tree/<SHA>` (troque `<SHA>` pelo hash completo do commit).
 2. Abra um terminal novo no StackBlitz.
 3. Confira os tipos: `npx tsc --noEmit`
 4. Rode os testes: `npx vitest run`
@@ -63,6 +63,8 @@ npm run dev
 
 - Comando de build: `npm run build`
 - Diretório de saída: `dist`
+- Versão do Node: variável de ambiente `NODE_VERSION=22` (a mesma do `.nvmrc`; o `package.json` exige Node 20.19 ou mais novo).
+- Lockfile: o repositório ainda não tem `package-lock.json`, porque o ambiente de desenvolvimento não roda `npm`. As dependências usam faixas (`^`), e uma nova instalação pode trazer versões mais novas do que as testadas. Antes da primeira publicação, gere o `package-lock.json` no StackBlitz (`npm install` no terminal), baixe-o e faça o commit dele, para que a Cloudflare instale exatamente as versões conferidas.
 - Segredos (Settings > Variables and Secrets): `SITE_USER` e `SITE_PASSWORD`. O usuário não diferencia maiúsculas de minúsculas; sem `SITE_USER`, qualquer usuário é aceito.
 - Sem `SITE_PASSWORD` o site responde 503 e fica fechado: a configuração é obrigatória.
 - O acesso é protegido por `functions/_middleware.js` (autenticação básica) para toda a equipe.
@@ -77,3 +79,5 @@ A ferramenta marca estes pontos com o selo "ponto em aberto" na tela, no PDF e n
 2. Venda a prazo com ganho acima de R$ 5.000.000: a alíquota por parcela é interpretação.
 3. Lei 14.973 com percentual acima de zero: não há exemplo oficial do rateio entre CAA e DTA.
 4. DARF 4600: citado pelo Perguntão para doação, sem o ato que o institui.
+5. Migração da Lei 14.973 para o Rearp e venda em até 5 anos: tratada como desfazimento do Rearp (IN RFB 2.302/2025, art. 17, não lido por inteiro).
+6. Venda a prazo com corretagem: o ganho é apurado sobre o valor total e a corretagem é deduzida da parcela do mês em que foi paga (IN SRF 84/2001, art. 19, § 4º); o efeito sobre a proporção do ganho por parcela é ponto em aberto.

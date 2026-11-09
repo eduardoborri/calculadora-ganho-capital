@@ -20,12 +20,6 @@ export function slug(text: string): string {
     .replace(/^_+|_+$/g, "");
 }
 
-export function parseCurrencyBR(raw: string): number {
-  const normalized = raw.replace(/\./g, "").replace(",", ".");
-  const value = parseFloat(normalized);
-  return Number.isFinite(value) ? value : 0;
-}
-
 // Rounds to cents without floating-point drift (1.005 → 1.01).
 // Rounds the magnitude (half away from zero) and restores the sign; never -0.
 // Trims first to 15 significant digits to drop binary noise.

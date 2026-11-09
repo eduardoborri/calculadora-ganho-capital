@@ -1,18 +1,11 @@
 import { REINVESTMENT_DAYS } from "../../constants";
 import type { Application, CaseInput } from "../../types";
-import { addDays, isValidDate } from "../../utils/dates";
+import { reinvestmentDeadline } from "../../utils/exemptions";
 import { formatCurrency, formatDate, formatPercent, round2 } from "../../utils/format";
 import RowTable, { CellDate, CellMoney } from "../shared/RowTable";
 import { newId } from "../shared/newId";
 import type { BlockWithResultProps } from "./blockProps";
 import { BlockCard, CheckField, DateField, Field } from "./fields";
-
-// Same rule as the engine: with several sales the term counts from the first contract.
-function deadlineOf(input: CaseInput): string | null {
-  const { moreThanOneSale, firstContractDate } = input.reinvestment;
-  const start = (moreThanOneSale && firstContractDate.trim()) || input.contractDate;
-  return isValidDate(start) ? addDays(start, REINVESTMENT_DAYS) : null;
-}
 
 export default function ReinvestmentBlock({ input, onChange, result }: BlockWithResultProps) {
   const reinvestment = input.reinvestment;
@@ -20,7 +13,8 @@ export default function ReinvestmentBlock({ input, onChange, result }: BlockWith
   const rows = reinvestment.applications;
   const setRow = (id: string, patch: Partial<Application>) =>
     set({ applications: rows.map((row) => (row.id === id ? { ...row, ...patch } : row)) });
-  const deadline = deadlineOf(input);
+  // The engine's rule: with several sales the term counts from the first contract.
+  const deadline = reinvestmentDeadline(input);
   const outcome = result.status === "ok" ? result.reinvestment : null;
 
   const control = (

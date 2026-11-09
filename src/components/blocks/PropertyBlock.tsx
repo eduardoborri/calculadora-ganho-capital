@@ -1,20 +1,10 @@
-import type { AcquisitionForm, Ownership } from "../../types";
+import { ACQUISITION_FORM_LABEL, labelOptions, OWNERSHIP_LABEL } from "../../data/labels";
+import type { Ownership } from "../../types";
 import type { BlockProps } from "./blockProps";
 import { BlockCard, CheckField, DateField, Field, MoneyField, Segmented, SelectField, TextField } from "./fields";
 
-const FORMS: { value: AcquisitionForm; label: string }[] = [
-  { value: "compra", label: "Compra (ou construção)" },
-  { value: "heranca", label: "Herança" },
-  { value: "legado", label: "Legado" },
-  { value: "doacao_adiantamento", label: "Doação em adiantamento da legítima" },
-  { value: "dissolucao", label: "Dissolução da sociedade conjugal (partilha)" },
-];
-
-const OWNERSHIPS: { value: Ownership; label: string }[] = [
-  { value: "exclusivo", label: "Exclusivo" },
-  { value: "condominio", label: "Condomínio" },
-  { value: "comunhao", label: "Comunhão (casamento)" },
-];
+const FORMS = labelOptions(ACQUISITION_FORM_LABEL);
+const OWNERSHIPS = labelOptions(OWNERSHIP_LABEL);
 
 const OWNERSHIP_HINTS: Record<Ownership, string> = {
   exclusivo: "O imóvel inteiro pertence ao alienante.",

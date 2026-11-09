@@ -119,6 +119,8 @@ Três níveis visuais. O coral fica só para imposto devido e risco.
 2. Venda a prazo com ganho acima de R$ 5.000.000: alíquota por parcela é interpretação.
 3. Lei 14.973 com percentual acima de zero: não há exemplo oficial do rateio entre CAA e DTA.
 4. DARF 4600: citado pelo Perguntão para doação, sem o ato que o institui.
+5. Migração da Lei 14.973 para o Rearp e venda em até 5 anos: tratada como desfazimento do Rearp (IN RFB 2.302/2025, art. 17, não lido por inteiro).
+6. Venda a prazo com corretagem: o ganho é apurado sobre o valor total e a corretagem é deduzida da parcela do mês em que foi paga (IN SRF 84/2001, art. 19, § 4º); o efeito sobre a proporção do ganho por parcela é ponto em aberto.
 
 ## 6. Tela
 
@@ -126,7 +128,7 @@ Três níveis visuais. O coral fica só para imposto devido e risco.
 - **Trabalho:** grade do IRPF-M, com formulário e coluna de 380 px para a memória, que desce para baixo do formulário no celular.
 - **Blocos:** Identificação, Imóvel, Custo, Alienação, Isenções, Reinvestimento e Atualização de valor. Os que não se aplicam ficam recolhidos.
 - **Memória:** padrão do `CalculationMemo`, de ganho bruto até imposto a pagar, com detalhe por linha. Abaixo, cronograma e alertas.
-- **Histórico:** valores e datas, sem nome, com aviso de que ficam naquela máquina, "Excluir" e "Limpar tudo".
+- **Histórico:** valores e datas, sem nome e sem descrição do imóvel, com aviso de que ficam naquela máquina, "Excluir" e "Limpar tudo".
 - **Reaproveitados do IRPF-M:** `CurrencyInput`, `Tooltip` com portal, valor padrão editável com ↺, colunas amarelas, layout `max-sm:`, `index.css`, fontes Inter, logo.
 
 Valor manual aparece marcado no PDF e na planilha. Ao sair do campo sem alterar, o valor segue automático.

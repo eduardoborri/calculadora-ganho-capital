@@ -1,3 +1,4 @@
+import { SCHEDULE_NOTE_PRAZO } from "../data/textos";
 import type { SaleMode, ScheduleLine } from "../types";
 import { formatDate, money } from "../utils/format";
 import { stackBody, stackCell, stackFoot, stackHead, stackRow, stackTable, stackTotalCell, stackTotalRow } from "./shared/styles";
@@ -20,7 +21,7 @@ export default function ScheduleTable({ schedule, saleMode }: ScheduleTableProps
       <h2 className="section-title">Cronograma de pagamento</h2>
       <p className="text-sm text-text-gray leading-relaxed max-w-[72ch]">
         {saleMode === "prazo"
-          ? "Uma linha por mês de recebimento. Ganho do mês = ganho total ÷ valor de alienação × valor recebido, menos a corretagem paga no mês (IN SRF 84/2001, art. 31)."
+          ? SCHEDULE_NOTE_PRAZO
           : "Imposto do mês do contrato."}{" "}
         Vencimento no último dia útil do mês seguinte, considerados os feriados nacionais.
       </p>

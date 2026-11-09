@@ -6,6 +6,7 @@ import {
   isNationalHoliday,
   lastBusinessDayOfNextMonth,
   monthsInclusive,
+  reportYear,
 } from '../src/utils/dates';
 
 describe('addYears', () => {
@@ -59,5 +60,20 @@ describe('isNationalHoliday', () => {
   });
   it('does not treat Carnival as holiday', () => {
     expect(isNationalHoliday('2026-02-17')).toBe(false);
+  });
+});
+
+describe('reportYear', () => {
+  it('keeps a typed year', () => {
+    expect(reportYear(2026, '2025-10-10')).toBe(2026);
+  });
+
+  it('falls back to the contract year when none was typed', () => {
+    expect(reportYear(0, '2025-10-10')).toBe(2025);
+  });
+
+  it('stays 0 without a typed year or a valid contract date', () => {
+    expect(reportYear(0, '')).toBe(0);
+    expect(reportYear(0, '2025-02-30')).toBe(0);
   });
 });

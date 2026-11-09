@@ -108,7 +108,7 @@ export default function WelcomeScreen({ entries, onStart, onOpen, onRemove, onCl
       <div className="mt-10 pt-6 border-t border-rule space-y-4">
         <h3 className="text-lg font-semibold text-primary">Histórico salvo</h3>
         <p className="text-sm text-text-gray leading-relaxed max-w-[72ch]">
-          As simulações salvas ficam só neste computador, no armazenamento do navegador. O nome do contribuinte não é gravado. Exclua o que
+          As simulações salvas ficam só neste computador, no armazenamento do navegador. Ficam valores e datas; nome e descrição não são gravados. Exclua o que
           não for mais necessário.
         </p>
         <HistoryList entries={entries} onOpen={onOpen} onRemove={onRemove} onClearAll={onClearAll} />

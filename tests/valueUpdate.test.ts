@@ -68,7 +68,7 @@ describe('applyValueUpdate', () => {
   it('without an update it keeps the input cost', () => {
     const costItems = [{id: 'a', description: 'a', date: '2015-03-10', value: 1000, hasDocument: true}];
     const input = caso({costItems, contractDate: '2025-10-10'});
-    expect(applyValueUpdate(input)).toEqual({costItems, gainOverride: null, deductFromTax: 0, alerts: []});
+    expect(applyValueUpdate(input)).toEqual({costItems, deductFromTax: 0, alerts: []});
   });
 
   it('Lei 14.973: CAA at the original date, DTA x % at the update date', () => {
@@ -331,6 +331,7 @@ describe('migration from Lei 14.973', () => {
     expect(r.items[0].m2).toBe(61);
     expect(levelOf(r, 'rearp-migracao')).toBe('info');
     expect(ids(r)).not.toContain('rearp-data');
+    expect(ids(r)).not.toContain('rearp-migracao-prazo');
   });
 
   it('it follows the Rearp within the lock, and asks for confirmation', () => {
@@ -340,6 +341,7 @@ describe('migration from Lei 14.973', () => {
     const alert = r.alerts.find((entry) => entry.id === 'rearp-reversao');
     expect(alert?.text).toContain('confirmado');
     expect(alert?.legal).toContain('art. 17');
+    expect(levelOf(r, 'rearp-migracao-prazo')).toBe('aberto');
   });
 
   it('the flag means nothing with law 14973', () => {
