@@ -3,13 +3,8 @@ import type {Moeda} from "./data/custoAte1995";
 export type AcquisitionForm = "compra" | "heranca" | "legado" | "doacao_adiantamento" | "dissolucao";
 export type Ownership = "exclusivo" | "condominio" | "comunhao";
 export type SaleMode = "vista" | "prazo" | "partes";
-export type OutOfScope =
-  | "nao_residente"
-  | "pessoa_juridica"
-  | "rural_terra_nua"
-  | "exterior"
-  | "moeda_estrangeira"
-  | "permuta_torna";
+export type Operation = "venda" | "permuta";
+export type OutOfScope = "nao_residente" | "pessoa_juridica" | "rural_terra_nua" | "exterior" | "moeda_estrangeira";
 
 export interface CostItem {
   id: string;
@@ -65,6 +60,9 @@ export interface ValueUpdate {
 // "prazo" the case brokerage is not used: brokerage comes from each installment.
 // PriorPart.gain is the taxable gain of that part, already after reductions, as typed.
 // With `update` present, costItems and landRule are ignored: the update sets the cost lines.
+// Operation "permuta" (permuta com torna): saleValue is ignored and the torna takes its place as
+// the amount received. permuta.torna and permuta.receivedValue are for the whole operation, so in
+// a condominium they scale by quotaPct like saleValue. Installments, in "prazo", are the torna's.
 export interface CaseInput {
   taxpayerName: string;
   calendarYear: number;
@@ -78,7 +76,9 @@ export interface CaseInput {
   landRule: boolean;
   costItems: CostItem[];
   contractDate: string;
+  operation: Operation;
   saleValue: number;
+  permuta: {torna: number; receivedValue: number};
   brokerage: number;
   saleMode: SaleMode;
   belowMarket: boolean;
@@ -156,5 +156,8 @@ export interface CaseResult {
   priorTaxPaid: number;
   taxPayable: number;
   schedule: ScheduleLine[];
+  // Permuta com torna, on the holder's figures; null for a sale (Perguntao IRPF 2026, 632).
+  // proportion = torna / (total cost + torna); receivedCost = cost of the property received.
+  permuta: {proportion: number; tornaGain: number; receivedCost: number} | null;
   alerts: Alert[];
 }

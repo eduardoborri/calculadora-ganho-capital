@@ -9,10 +9,16 @@ import {
 import type {Application, CaseInput, CaseResult, ExemptionCheck} from "../types";
 import {addDays, addYears, isValidDate} from "./dates";
 import {money} from "./format";
-import {saleShare} from "./holder";
+import {isPermuta, operationTotal} from "./holder";
+
+function permutaTotalNote(input: CaseInput): string {
+  return isPermuta(input) ? " Na permuta, conta o valor total da operação: torna mais imóvel recebido." : "";
+}
 
 // Small value (IN SRF 599/2005, art. 1): all or nothing. The total is the holder's part, as typed.
-// The month total includes this sale, so the larger of the two is compared to the limit.
+// The month total includes this sale, so the larger of the two is compared to the limit. In a
+// permuta the operation counts by its total value, torna plus property received, not by the torna
+// alone (Perguntao IRPF 2026, 681).
 export function checkSmallValue(input: CaseInput): ExemptionCheck {
   const {sameNatureMonthTotal: total, confirmed} = input.smallValue;
   const reasons: string[] = [];
@@ -21,12 +27,12 @@ export function checkSmallValue(input: CaseInput): ExemptionCheck {
       `Confirme que o total de bens da mesma natureza alienados no mês, na parte do titular, não passa de ${money(SMALL_VALUE_LIMIT)}.`,
     );
   }
-  const effective = Math.max(total, saleShare(input));
+  const effective = Math.max(total, operationTotal(input));
   if (!Number.isFinite(total) || total < 0) {
     reasons.push("Informe um total válido de bens da mesma natureza alienados no mês.");
   } else if (effective > SMALL_VALUE_LIMIT) {
     reasons.push(
-      `O total de bens da mesma natureza no mês (${money(effective)}) supera o limite de ${money(SMALL_VALUE_LIMIT)}.`,
+      `O total de bens da mesma natureza no mês (${money(effective)}) supera o limite de ${money(SMALL_VALUE_LIMIT)}.${permutaTotalNote(input)}`,
     );
   }
   return {applies: reasons.length === 0, reasons};
@@ -43,7 +49,9 @@ function hasRecentPriorPart(input: CaseInput): boolean {
 }
 
 // Single property (Lei 9.250/1995, art. 23): the limit compares the holder's sale value,
-// before brokerage.
+// before brokerage. In a permuta it compares the total value, torna plus property received: the
+// Perguntao does not say which one, so the larger, conservative one is used (alert
+// permuta-limite-unico-imovel).
 export function checkSingleProperty(input: CaseInput): ExemptionCheck {
   const {onlyProperty, noSaleIn5Years} = input.singleProperty;
   const reasons: string[] = [];
@@ -58,10 +66,11 @@ export function checkSingleProperty(input: CaseInput): ExemptionCheck {
       `Há parte anterior desta alienação nos ${SINGLE_PROPERTY_LOCK_YEARS} anos antes do contrato: ela conta como outra alienação e afasta a isenção do único imóvel.`,
     );
   }
-  const value = saleShare(input);
+  const value = operationTotal(input);
   if (!(value <= SINGLE_PROPERTY_LIMIT)) {
+    const label = isPermuta(input) ? "O valor total da permuta do titular" : "O valor de alienação do titular";
     reasons.push(
-      `O valor de alienação do titular (${money(value)}) supera o limite de ${money(SINGLE_PROPERTY_LIMIT)}.`,
+      `${label} (${money(value)}) supera o limite de ${money(SINGLE_PROPERTY_LIMIT)}.${permutaTotalNote(input)}`,
     );
   }
   return {applies: reasons.length === 0, reasons};

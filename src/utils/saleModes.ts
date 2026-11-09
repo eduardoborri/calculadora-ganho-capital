@@ -5,7 +5,7 @@ import {TAX_BRACKETS} from "../constants";
 import type {Alert, CaseInput, Installment, PriorPart, ScheduleLine} from "../types";
 import {lastBusinessDayOfNextMonth} from "./dates";
 import {money} from "./format";
-import {saleShare} from "./holder";
+import {receivedLabel, saleShare} from "./holder";
 import {progressiveTax} from "./taxTable";
 
 // Half a cent, not a legal value: a difference up to this is rounding, not a gap in the installments.
@@ -144,7 +144,7 @@ export function saleModeAlerts(input: CaseInput, taxableGain: number): Alert[] {
     alerts.push({
       id: "parcelas-diferenca",
       level: "aviso",
-      text: `As parcelas informadas somam ${money(total)} e ficam ${money(share - total)} abaixo do valor de alienação do titular (${money(share)}). O cronograma mostra só o informado.`,
+      text: `As parcelas informadas somam ${money(total)} e ficam ${money(share - total)} abaixo ${receivedLabel(input, true)} (${money(share)}). O cronograma mostra só o informado.`,
       legal: "IN SRF 84/2001, art. 31",
     });
   }

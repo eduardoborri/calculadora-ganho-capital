@@ -10,13 +10,15 @@ import {
   REARP_OPTION_DEADLINE,
   REINVESTMENT_DAYS,
   REINVESTMENT_LOCK_YEARS,
+  SINGLE_PROPERTY_LIMIT,
   TRANSFER_AT_MARKET_RATE,
 } from "../constants";
 import type {Alert, CaseInput, CaseResult, CostItem, ValueUpdate} from "../types";
 import {filledItems} from "./costItems";
 import {isValidDate, monthsInclusive, todayInBrazil} from "./dates";
 import {formatDate, formatPercent, money, round2} from "./format";
-import {saleModeAlerts, summedPriorParts} from "./saleModes";
+import {isPermuta, saleShare} from "./holder";
+import {installmentsBrokerage, saleModeAlerts, summedPriorParts} from "./saleModes";
 import {progressiveTax} from "./taxTable";
 
 // ---- Value update ----
@@ -390,6 +392,50 @@ function ownershipAlerts(input: CaseInput): Alert[] {
   ];
 }
 
+// ---- Permuta com torna ----
+
+function permutaBrokerage(input: CaseInput): number {
+  return input.saleMode === "prazo" ? installmentsBrokerage(input) : input.brokerage;
+}
+
+// Info on the result of a permuta, and the open points it carries. partial.permuta is set for
+// every permuta that reaches the calculation.
+function permutaAlerts(input: CaseInput, partial: CaseResult): Alert[] {
+  if (!isPermuta(input) || !partial.permuta) return [];
+  const alerts: Alert[] = [];
+  if (saleShare(input) === 0) {
+    alerts.push({
+      id: "permuta-sem-torna",
+      level: "info",
+      text: "Permuta sem torna: não há ganho de capital a apurar nem imposto devido.",
+      legal: "RIR/2018, art. 132, II",
+    });
+  }
+  alerts.push({
+    id: "permuta-custo-recebido",
+    level: "info",
+    text: `Custo do imóvel recebido para a declaração, na parte do titular: ${money(partial.permuta.receivedCost)} (custo do imóvel dado menos a torna, mais o ganho apurado sobre a torna antes das reduções).`,
+    legal: "RIR/2018, art. 128, § 4º, II; Perguntão IRPF 2026, pergunta 632",
+  });
+  if (permutaBrokerage(input) > 0) {
+    alerts.push({
+      id: "permuta-corretagem",
+      level: "aberto",
+      text: "Permuta com corretagem: a corretagem foi deduzida da torna, como na venda, e a proporção da torna foi calculada sobre a torna bruta. O Perguntão não traz exemplo com corretagem, e o custo do imóvel recebido usa o ganho já líquido dela.",
+      legal: "IN SRF 84/2001, art. 19, § 4º; Perguntão IRPF 2026, pergunta 632",
+    });
+  }
+  if (input.singleProperty.onlyProperty) {
+    alerts.push({
+      id: "permuta-limite-unico-imovel",
+      level: "aberto",
+      text: `Isenção do único imóvel na permuta: o Perguntão não diz se o limite de ${money(SINGLE_PROPERTY_LIMIT)} se aplica à torna ou ao valor total da operação. A ferramenta compara o valor total (torna mais imóvel recebido), a leitura conservadora.`,
+      legal: "Lei 9.250/1995, art. 23; IN SRF 84/2001, art. 29, § 5º; Perguntão IRPF 2026",
+    });
+  }
+  return alerts;
+}
+
 // ---- Open points (spec 5.1). Installments: the tax rate is in saleModeAlerts, the brokerage in
 // installmentAlerts ----
 
@@ -431,6 +477,7 @@ export function buildAlerts(input: CaseInput, partial: CaseResult, today: string
     ...costAlerts(input),
     ...transferAlerts(input),
     ...ownershipAlerts(input),
+    ...permutaAlerts(input, partial),
     ...calendarYearAlerts(input),
     ...projectiveAlerts(input, today),
     ...m2Alerts(input, partial),

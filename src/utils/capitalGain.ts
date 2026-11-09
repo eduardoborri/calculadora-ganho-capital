@@ -31,7 +31,7 @@ import {filledItems} from "./costItems";
 import {isValidDate, monthsInclusive} from "./dates";
 import {checkSingleProperty, checkSmallValue, reinvestmentOutcome} from "./exemptions";
 import {money} from "./format";
-import {holderPart, saleShare} from "./holder";
+import {holderPart, isPermuta, receivedLabel, saleShare} from "./holder";
 import {
   buildSchedule,
   INSTALLMENT_TOLERANCE,
@@ -58,7 +58,9 @@ export function defaultCaseInput(): CaseInput {
     landRule: false,
     costItems: [],
     contractDate: "",
+    operation: "venda",
     saleValue: 0,
+    permuta: {torna: 0, receivedValue: 0},
     brokerage: 0,
     saleMode: "vista",
     belowMarket: false,
@@ -137,7 +139,6 @@ const OUT_OF_SCOPE_REASONS: Record<OutOfScope, string> = {
   rural_terra_nua: "Imóvel rural com regra de terra nua: caso fora do escopo da ferramenta.",
   exterior: "Imóvel no exterior: caso fora do escopo da ferramenta.",
   moeda_estrangeira: "Operação em moeda estrangeira: caso fora do escopo da ferramenta.",
-  permuta_torna: "Permuta com torna: caso fora do escopo da ferramenta.",
 };
 
 // Sanity ceiling, not a legal value: keeps products and sums finite, so overflow cannot
@@ -202,12 +203,45 @@ function checkApplications(input: CaseInput, issues: Issues): void {
   }
 }
 
-function checkSale(input: CaseInput, issues: Issues): void {
-  if (!isValidAmount(input.saleValue)) {
+// In a permuta the torna may be zero (permuta sem torna, no gain), but the value of the property
+// received is always needed for the small-value and single-property limits.
+function checkPermutaValues(input: CaseInput, issues: Issues): void {
+  const {torna, receivedValue} = input.permuta;
+  if (!isValidAmount(torna)) {
+    issues.invalid.push("A torna deve ser um número positivo de até 1 quatrilhão.");
+  }
+  if (!isValidAmount(receivedValue)) {
+    issues.invalid.push("O valor do imóvel recebido deve ser um número positivo de até 1 quatrilhão.");
+  } else if (receivedValue === 0) {
+    issues.missing.push("Valor do imóvel recebido");
+  }
+}
+
+function checkSaleValue(input: CaseInput, issues: Issues): void {
+  if (isPermuta(input)) {
+    checkPermutaValues(input, issues);
+  } else if (!isValidAmount(input.saleValue)) {
     issues.invalid.push("O valor de alienação deve ser um número positivo de até 1 quatrilhão.");
   } else if (input.saleValue === 0) {
     issues.missing.push("Valor de alienação");
   }
+}
+
+// In a permuta the brokerage comes off the torna, so it can never exceed it, even when the torna
+// is zero (IN SRF 84/2001, art. 19, par. 4).
+function checkBrokerage(input: CaseInput, issues: Issues): void {
+  const share = saleShare(input);
+  if (!isValidAmount(input.brokerage)) {
+    issues.invalid.push("A corretagem deve ser um número positivo de até 1 quatrilhão.");
+  } else if (isPermuta(input) && input.brokerage > share) {
+    issues.invalid.push("A corretagem não pode superar a torna do titular.");
+  } else if (!isPermuta(input) && share > 0 && input.brokerage > share) {
+    issues.invalid.push("A corretagem não pode superar o valor de alienação.");
+  }
+}
+
+function checkSale(input: CaseInput, issues: Issues): void {
+  checkSaleValue(input, issues);
   if (input.ownership === "condominio") {
     if (!isValidAmount(input.quotaPct) || input.quotaPct > 100) {
       issues.invalid.push("O percentual da quota deve estar entre 0 e 100.");
@@ -215,11 +249,7 @@ function checkSale(input: CaseInput, issues: Issues): void {
       issues.missing.push("Percentual da quota");
     }
   }
-  if (!isValidAmount(input.brokerage)) {
-    issues.invalid.push("A corretagem deve ser um número positivo de até 1 quatrilhão.");
-  } else if (saleShare(input) > 0 && input.brokerage > saleShare(input)) {
-    issues.invalid.push("A corretagem não pode superar o valor de alienação.");
-  }
+  checkBrokerage(input, issues);
 }
 
 function checkCostItem(item: CostItem, input: CaseInput, issues: Issues): void {
@@ -308,12 +338,11 @@ function checkInstallments(input: CaseInput, issues: Issues): void {
   if (input.installments.length === 0) issues.missing.push("Parcelas");
   input.installments.forEach((installment) => checkInstallment(installment, input, issues));
 
+  // A permuta without torna has nothing to receive in installments, so any installment exceeds it.
   const share = saleShare(input);
   const total = installmentsTotal(input);
-  if (share > 0 && total - share > INSTALLMENT_TOLERANCE) {
-    issues.invalid.push(
-      `As parcelas somam ${money(total)} e superam o valor de alienação do titular (${money(share)}).`,
-    );
+  if ((share > 0 || isPermuta(input)) && total - share > INSTALLMENT_TOLERANCE) {
+    issues.invalid.push(`As parcelas somam ${money(total)} e superam ${receivedLabel(input)} (${money(share)}).`);
   }
 }
 
@@ -376,6 +405,35 @@ function costLines(input: CaseInput): CostLine[] {
     cost: input.update ? correctedCost(item) : holderPart(input, correctedCost(item)),
     isLand: Boolean(item.isLand),
   }));
+}
+
+// Permuta com torna (Perguntao IRPF 2026, 632; IN SRF 84/2001, art. 29, par. 5): only the share
+// torna / (cost + torna) of the cost goes against the torna. Taken on the holder's figures, so a
+// condominium keeps the same proportion. Without torna the factor is 0: no gain (RIR/2018,
+// art. 132, II). A sale keeps the whole cost.
+function permutaFactor(input: CaseInput, holderTotalCost: number): number {
+  if (!isPermuta(input)) return 1;
+  const torna = saleShare(input);
+  const base = holderTotalCost + torna;
+  return base > 0 ? torna / base : 0;
+}
+
+// Each line, virtual update lines included, keeps its date and carries its share of the factor.
+function scaleLines(lines: CostLine[], factor: number): CostLine[] {
+  return factor === 1 ? lines : lines.map((line) => ({...line, cost: line.cost * factor}));
+}
+
+// Cost of the property received = cost of the property given - (torna - gain)
+// (RIR/2018, art. 128, par. 4, II; Perguntao IRPF 2026, 632).
+function permutaOutcome(
+  input: CaseInput,
+  factor: number,
+  holderTotalCost: number,
+  grossGain: number,
+): CaseResult["permuta"] {
+  if (!isPermuta(input)) return null;
+  const tornaGain = Math.max(0, grossGain);
+  return {proportion: factor, tornaGain, receivedCost: holderTotalCost - (saleShare(input) - tornaGain)};
 }
 
 // Zero total cost: a single virtual item takes the whole gain at the acquisition date.
@@ -451,6 +509,7 @@ function blockedResult(status: CaseStatus, missing: string[]): CaseResult {
     priorTaxPaid: 0,
     taxPayable: 0,
     schedule: [],
+    permuta: null,
     alerts: [],
   };
 }
@@ -467,8 +526,12 @@ export function calculateCase(input: CaseInput): CaseResult {
   const updated = applyValueUpdate(input);
   const costInput = input.update ? {...input, costItems: updated.costItems, landRule: false} : input;
 
+  // In a permuta, saleNet is the torna net of brokerage and the lines hold only the torna's share.
   const saleNet = computeSaleNet(input);
-  const lines = costLines(costInput);
+  const holderLines = costLines(costInput);
+  const holderTotalCost = holderLines.reduce((sum, line) => sum + line.cost, 0);
+  const factor = permutaFactor(input, holderTotalCost);
+  const lines = scaleLines(holderLines, factor);
   const totalCost = lines.reduce((sum, line) => sum + line.cost, 0);
   const grossGain = saleNet - totalCost;
 
@@ -507,6 +570,7 @@ export function calculateCase(input: CaseInput): CaseResult {
     priorTaxPaid,
     taxPayable,
     schedule,
+    permuta: permutaOutcome(input, factor, holderTotalCost, grossGain),
     alerts: updated.alerts,
   };
   return {...partial, alerts: buildAlerts(input, partial)};

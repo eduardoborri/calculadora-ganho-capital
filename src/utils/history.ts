@@ -4,6 +4,7 @@ import type {
   Application,
   CaseInput,
   CostItem,
+  Operation,
   OutOfScope,
   Ownership,
   SaleMode,
@@ -92,8 +93,8 @@ const OUT_OF_SCOPE = keysOf<OutOfScope>({
   rural_terra_nua: true,
   exterior: true,
   moeda_estrangeira: true,
-  permuta_torna: true,
 });
+const OPERATIONS = keysOf<Operation>({venda: true, permuta: true});
 
 function normalizeCostItem(r: Record<string, unknown>): CostItem {
   const item: CostItem = {
@@ -133,6 +134,7 @@ function normalizeInput(raw: Record<string, unknown>): CaseInput {
   const sv = isObject(raw.smallValue) ? raw.smallValue : {};
   const sp = isObject(raw.singleProperty) ? raw.singleProperty : {};
   const re = isObject(raw.reinvestment) ? raw.reinvestment : {};
+  const pe = isObject(raw.permuta) ? raw.permuta : {};
   return {
     taxpayerName: str(raw.taxpayerName, d.taxpayerName),
     calendarYear: num(raw.calendarYear, d.calendarYear),
@@ -146,7 +148,12 @@ function normalizeInput(raw: Record<string, unknown>): CaseInput {
     landRule: bool(raw.landRule, d.landRule),
     costItems: objects(raw.costItems).map(normalizeCostItem),
     contractDate: str(raw.contractDate, d.contractDate),
+    operation: oneOf(raw.operation, OPERATIONS, d.operation),
     saleValue: num(raw.saleValue, d.saleValue),
+    permuta: {
+      torna: num(pe.torna, d.permuta.torna),
+      receivedValue: num(pe.receivedValue, d.permuta.receivedValue),
+    },
     brokerage: num(raw.brokerage, d.brokerage),
     saleMode: oneOf(raw.saleMode, SALE_MODES, d.saleMode),
     belowMarket: bool(raw.belowMarket, d.belowMarket),
@@ -184,6 +191,7 @@ function normalizeInput(raw: Record<string, unknown>): CaseInput {
       landOrGarage: bool(re.landOrGarage, d.reinvestment.landOrGarage),
     },
     update: normalizeUpdate(raw.update),
+    // Old entries may hold "permuta_torna", no longer out of scope: the filter drops it.
     outOfScope: Array.isArray(raw.outOfScope)
       ? raw.outOfScope.filter((k): k is OutOfScope => OUT_OF_SCOPE.includes(k as OutOfScope))
       : [],

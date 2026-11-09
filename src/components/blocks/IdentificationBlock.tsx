@@ -9,7 +9,6 @@ const OUT_OF_SCOPE_OPTIONS: { value: OutOfScope; label: string }[] = [
   { value: "rural_terra_nua", label: "Imóvel rural com regra de terra nua" },
   { value: "exterior", label: "Imóvel no exterior" },
   { value: "moeda_estrangeira", label: "Operação em moeda estrangeira" },
-  { value: "permuta_torna", label: "Permuta com torna" },
 ];
 
 export default function IdentificationBlock({ input, onChange }: BlockProps) {
