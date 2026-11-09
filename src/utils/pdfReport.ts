@@ -163,9 +163,20 @@ class Report {
     this.doc.setFillColor(...color);
   }
 
+  // Helvetica fallback: glyphs outside its encoding become ASCII stand-ins.
+  private clean(text: string): string {
+    if (this.assets.font === "Inter") return text;
+    return text.replace(/−/g, "-").replace(/÷/g, "/");
+  }
+
   // Starts a page with the template chrome and the given heading.
-  page(heading: PageHeading, isFirst = false) {
+  page(rawHeading: PageHeading, isFirst = false) {
     if (!isFirst) this.doc.addPage();
+    const heading = {
+      eyebrow: this.clean(rawHeading.eyebrow),
+      title: this.clean(rawHeading.title),
+      subtitle: this.clean(rawHeading.subtitle),
+    };
     this.heading = heading;
     const d = this.doc;
 
@@ -205,7 +216,7 @@ class Report {
     const d = this.doc;
     const textWidth = WIDTH - 35;
     this.font("normal", 9.5, C.body);
-    const lines = d.splitTextToSize(text, textWidth);
+    const lines = d.splitTextToSize(this.clean(text), textWidth);
     const titleHeight = title ? 15 : 0;
     const height = 12.5 + titleHeight + lines.length * 14 + 6;
     this.ensure(height + 12);
@@ -218,7 +229,7 @@ class Report {
     let ty = this.y + 22.5;
     if (title) {
       this.font("bold", 9.5, tone === "alert" ? C.coral : C.primary);
-      d.text(title, 76.7, ty);
+      d.text(this.clean(title), 76.7, ty);
       ty += titleHeight;
     }
     this.font("normal", 9.5, C.body);
@@ -244,7 +255,7 @@ class Report {
     const layout = (values: string[], kind: RowKind | "header", min: number) => {
       const s = style(kind);
       this.font(s.weight, s.size, s.color);
-      const wrapped = columns.map((col, i) => d.splitTextToSize(values[i] ?? "", col.width - 2 * pad) as string[]);
+      const wrapped = columns.map((col, i) => d.splitTextToSize(this.clean(values[i] ?? ""), col.width - 2 * pad) as string[]);
       const lines = Math.max(1, ...wrapped.map((w) => w.length));
       return { wrapped, height: Math.max(min, lines * lineH + 2 * (options.compact ? 5 : 8)) };
     };
@@ -310,10 +321,13 @@ class Report {
     this.y += 10;
   }
 
+  // Every text block below wraps with its font, then re-applies it after ensure(): a
+  // continuation page draws its heading and leaves another font and colour set.
   footnote(text: string) {
     this.font("normal", 7.5, C.muted);
-    const lines = this.doc.splitTextToSize(text, WIDTH);
+    const lines = this.doc.splitTextToSize(this.clean(text), WIDTH);
     this.ensure(lines.length * 10 + 4);
+    this.font("normal", 7.5, C.muted);
     this.doc.text(lines, LEFT + 0.3, this.y + 6, { lineHeightFactor: 10 / 7.5, align: "justify", maxWidth: WIDTH });
     this.y += lines.length * 10 + 14;
   }
@@ -321,8 +335,9 @@ class Report {
   // Justified running text (last line left-aligned).
   paragraph(text: string, width = WIDTH) {
     this.font("normal", 9.5, C.body);
-    const lines = this.doc.splitTextToSize(text, width);
+    const lines = this.doc.splitTextToSize(this.clean(text), width);
     this.ensure(lines.length * 14.5 + 6);
+    this.font("normal", 9.5, C.body);
     this.doc.text(lines, LEFT, this.y + 10, { lineHeightFactor: 14.5 / 9.5, align: "justify", maxWidth: width });
     this.y += lines.length * 14.5 + 8;
   }
@@ -332,8 +347,9 @@ class Report {
     const indent = 12;
     const width = WIDTH - indent;
     this.font("normal", 9.5, C.body);
-    const lines = this.doc.splitTextToSize(text, width);
+    const lines = this.doc.splitTextToSize(this.clean(text), width);
     this.ensure(lines.length * 14.5 + 6);
+    this.font("normal", 9.5, C.body);
     this.doc.text("•", LEFT, this.y + 10);
     this.doc.text(lines, LEFT + indent, this.y + 10, { lineHeightFactor: 14.5 / 9.5, align: "justify", maxWidth: width });
     this.y += lines.length * 14.5 + 6;
@@ -342,7 +358,7 @@ class Report {
   subheading(text: string) {
     this.ensure(60);
     this.font("bold", 10.5, C.primary);
-    this.doc.text(text, LEFT, this.y + 12);
+    this.doc.text(this.clean(text), LEFT, this.y + 12);
     this.y += 22;
   }
 
@@ -495,7 +511,8 @@ export function buildPdfReport(params: PdfReportParams, files: ReportFiles): Gen
 
 function notesPages(r: Report, input: CaseInput, result: CaseResult, eyebrow: string, today: string) {
   r.page({ eyebrow, title: "Notas metodológicas", subtitle: "Premissas adotadas, alertas e pontos em aberto da apuração" });
-  if (isValidDate(input.contractDate) && input.contractDate > today) {
+  const projective = isValidDate(input.contractDate) && input.contractDate > today;
+  if (projective) {
     r.callout(
       `A data do contrato (${formatDate(input.contractDate)}) é posterior à data de emissão deste relatório (${formatDate(today)}). Por isso, a apuração tem caráter projetivo: aplica aos dados informados a tabela e as regras vigentes na data de emissão, e o resultado pode variar se a legislação ou os dados se alterarem até a operação.`,
       "neutral",
@@ -507,18 +524,20 @@ function notesPages(r: Report, input: CaseInput, result: CaseResult, eyebrow: st
 
   r.y += 6;
   r.subheading("Alertas e pontos em aberto");
-  if (result.alerts.length === 0) {
-    r.paragraph("Não há alertas para os dados informados.");
+  // The projective callout above already says what the "operacao-futura" alert says.
+  const alerts = projective ? result.alerts.filter((a) => a.id !== "operacao-futura") : result.alerts;
+  if (alerts.length === 0) {
+    r.paragraph(projective ? "Não há outros alertas para os dados informados." : "Não há alertas para os dados informados.");
     return;
   }
-  result.alerts.forEach((alert) => {
+  alerts.forEach((alert) => {
     r.callout(
       `${withoutFinalPeriod(alert.text)}. Referência: ${withoutFinalPeriod(alert.legal)}.`,
       alert.level === "risco" ? "alert" : "neutral",
       LEVEL_LABEL[alert.level]
     );
   });
-  if (result.alerts.some((a) => a.level === "aberto")) {
+  if (alerts.some((a) => a.level === "aberto")) {
     r.footnote(
       "Ponto em aberto: tema em que a apuração adota uma interpretação sem exemplo oficial ou sem ato normativo localizado. O resultado correspondente deve ser lido com essa limitação."
     );

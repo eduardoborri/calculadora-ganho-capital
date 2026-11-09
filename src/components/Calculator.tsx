@@ -56,15 +56,29 @@ export default function Calculator() {
   // download in the same event. A download started after an await may be dropped by the
   // browser as not user-initiated.
   const reportFiles = useRef<ReportFiles | null>(null);
+  // Object URL of the last report, revoked when replaced, cleared or on unmount.
+  const pdfUrl = useRef<string | null>(null);
+  // Bumped on every export and whenever the case is left: a late async result is ignored.
+  const pdfRequest = useRef(0);
   useEffect(() => {
     preloadReportFiles().then((files) => (reportFiles.current = files));
+    return () => {
+      pdfRequest.current += 1;
+      if (pdfUrl.current) URL.revokeObjectURL(pdfUrl.current);
+      pdfUrl.current = null;
+    };
   }, []);
 
-  const clearPdfStatus = () =>
-    setPdfStatus((prev) => {
-      if (prev.state === "done") URL.revokeObjectURL(prev.url);
-      return { state: "idle" };
-    });
+  const releasePdfUrl = () => {
+    if (pdfUrl.current) URL.revokeObjectURL(pdfUrl.current);
+    pdfUrl.current = null;
+  };
+
+  const clearPdfStatus = () => {
+    pdfRequest.current += 1;
+    releasePdfUrl();
+    setPdfStatus({ state: "idle" });
+  };
 
   const onChange = useCallback((patch: Partial<CaseInput>) => setInput((prev) => ({ ...prev, ...patch })), []);
 
@@ -86,23 +100,29 @@ export default function Calculator() {
 
   const exportPdf = () => {
     if (result.status !== "ok" || pdfStatus.state === "generating") return;
-    if (pdfStatus.state === "done") URL.revokeObjectURL(pdfStatus.url);
+    releasePdfUrl();
+    const request = ++pdfRequest.current;
     // The case at the moment of the click, even if the screen changes while files load.
     const params = { input, result };
     const finish = (files: ReportFiles) => {
+      if (request !== pdfRequest.current) return; // the case was left or reopened meanwhile
       reportFiles.current = files;
       const { blob, fileName, usedFallbackFont } = buildPdfReport(params, files);
       const url = URL.createObjectURL(blob);
+      pdfUrl.current = url;
       setPdfStatus({ state: "done", url, fileName, usedFallbackFont });
       triggerDownload(url, fileName);
     };
     const fail = (err: unknown) => {
+      if (request !== pdfRequest.current) return;
       console.error(err);
       setPdfStatus({ state: "error", message: err instanceof Error ? err.message : String(err) });
     };
 
+    // With the fonts cached, build now even without the logo: the report goes out without it
+    // instead of waiting on a retry at every click.
     const files = reportFiles.current;
-    if (files?.fonts && files.logo) {
+    if (files?.fonts) {
       try {
         finish(files);
       } catch (err) {
