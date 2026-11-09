@@ -117,6 +117,86 @@ describe('histórico', () => {
     expect(() => calculateCase(entry.input)).not.toThrow();
   });
 
+  it.each([
+    ['update vazio', {update: {}}],
+    ['update com law inválida', {update: {law: 'x', date: '2026-01-01'}}],
+    ['update parcial', {update: {law: 'rearp', date: '2026-01-01'}}],
+    ['costItems null', {costItems: [null]}],
+    ['costItems número', {costItems: [5]}],
+    ['costItems vazio', {costItems: [{}]}],
+    ['acquisitionDate null', {acquisitionDate: null}],
+    ['contractDate número', {contractDate: 5}],
+    ['saleValue texto', {saleValue: 'x'}],
+    ['applications null', {reinvestment: {applications: [null]}}],
+    ['applications vazio', {reinvestment: {applications: [{}]}}],
+    ['installments vazio', {saleMode: 'prazo', installments: [{}]}],
+    ['priorParts null', {saleMode: 'partes', priorParts: [null]}],
+    ['priorParts vazio', {saleMode: 'partes', priorParts: [{}]}],
+    ['outOfScope inválido', {outOfScope: ['xyz']}],
+    ['enum inválido', {acquisitionForm: 'zzz', ownership: 1, saleMode: null}],
+  ])('entrada corrompida (%s) não faz calculateCase lançar', (_nome, input) => {
+    const raw = JSON.stringify([{id: 'a', savedAt: '2026-01-01T00:00:00.000Z', input}]);
+    const [entry] = loadHistory(fakeStorage({[HISTORY_KEY]: raw}));
+    expect(() => calculateCase(entry.input)).not.toThrow();
+  });
+
+  it('entrada bem formada faz ida e volta sem mudar', () => {
+    const s = fakeStorage();
+    const full = caso({
+      taxpayerName: '',
+      calendarYear: 2026,
+      acquisitionDate: '2010-05-10',
+      contractDate: '2026-03-01',
+      saleValue: 800000,
+      ownership: 'condominio',
+      quotaPct: 50,
+      saleMode: 'prazo',
+      costItems: [
+        {id: 'c1', description: 'Compra', date: '2010-05-10', value: 300000, hasDocument: true, isLand: true},
+        {
+          id: 'c2',
+          description: 'Antigo',
+          date: '1990-01-01',
+          value: 10,
+          hasDocument: false,
+          original: {amount: 5, moeda: 'Cruzeiros'},
+          manual: true,
+        },
+      ],
+      installments: [{id: 'i1', date: '2026-04-01', value: 100000, brokerage: 10}],
+      priorParts: [{id: 'p1', date: '2025-01-01', gain: 1000, taxPaid: 150}],
+      smallValue: {sameNatureMonthTotal: 10, confirmed: true},
+      singleProperty: {onlyProperty: true, noSaleIn5Years: true},
+      reinvestment: {
+        enabled: true,
+        firstContractDate: '2026-03-01',
+        usedInLast5Years: false,
+        moreThanOneSale: false,
+        landOrGarage: false,
+        applications: [{id: 'a1', date: '2026-05-01', value: 5000, kind: 'quitacao'}],
+      },
+      update: {
+        law: 'rearp',
+        date: '2026-01-01',
+        caa: 1,
+        dta: 2,
+        originalAcquisitionDate: '2000-01-01',
+        migratedFrom14973: true,
+        taxPaidSelic: 3,
+        exceptionCausaMortisOuPartilha: false,
+      },
+      outOfScope: ['exterior'],
+    });
+    saveEntry(full, s);
+    expect(loadHistory(s)[0].input).toEqual(full);
+  });
+
+  it('entrada sem id é descartada', () => {
+    const raw = JSON.stringify([{input: {saleValue: 1}}, {id: 'ok', input: {}}]);
+    const list = loadHistory(fakeStorage({[HISTORY_KEY]: raw}));
+    expect(list.map((e) => e.id)).toEqual(['ok']);
+  });
+
   it('setItem que lança faz saveEntry retornar false', () => {
     const s = fakeStorage();
     s.setItem = () => {
