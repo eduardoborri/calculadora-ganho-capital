@@ -1,8 +1,9 @@
-import { useCallback, useMemo, useState } from "react";
-import { ArrowLeft, Save, X } from "lucide-react";
-import type { CaseInput } from "../types";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { ArrowLeft, Download, Save, X } from "lucide-react";
+import type { CaseInput, CaseStatus } from "../types";
 import { calculateCase, defaultCaseInput } from "../utils/capitalGain";
 import { clearHistory, loadHistory, removeEntry, saveEntry, type HistoryEntry } from "../utils/history";
+import { buildPdfReport, preloadReportFiles, type ReportFiles } from "../utils/pdfReport";
 import AlertList from "./AlertList";
 import CalculationMemo from "./CalculationMemo";
 import CostTable from "./CostTable";
@@ -17,6 +18,28 @@ import ValueUpdateBlock from "./blocks/ValueUpdateBlock";
 
 type Notice = { kind: "ok" | "error"; text: string };
 
+type PdfStatus =
+  | { state: "idle" }
+  | { state: "generating" }
+  | { state: "done"; url: string; fileName: string; usedFallbackFont: boolean }
+  | { state: "error"; message: string };
+
+// Why the PDF button is off: only a complete, valid case in scope has a report.
+const PDF_BLOCKED_REASON: Record<Exclude<CaseStatus, "ok">, string> = {
+  incompleto: "Preencha os dados pendentes para gerar o PDF.",
+  invalido: "Corrija os dados indicados na memória para gerar o PDF.",
+  fora_de_escopo: "Caso fora do escopo da ferramenta: sem PDF.",
+};
+
+function triggerDownload(url: string, fileName: string) {
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = fileName;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+}
+
 // Single CaseInput state for the whole screen; the result is recomputed on every change.
 export default function Calculator() {
   const [input, setInput] = useState<CaseInput>(defaultCaseInput);
@@ -27,6 +50,21 @@ export default function Calculator() {
   const [session, setSession] = useState(0);
   const [entries, setEntries] = useState<HistoryEntry[]>(() => loadHistory());
   const [notice, setNotice] = useState<Notice | null>(null);
+  const [pdfStatus, setPdfStatus] = useState<PdfStatus>({ state: "idle" });
+
+  // Fonts and logo are fetched ahead of time, so the click builds the PDF and starts the
+  // download in the same event. A download started after an await may be dropped by the
+  // browser as not user-initiated.
+  const reportFiles = useRef<ReportFiles | null>(null);
+  useEffect(() => {
+    preloadReportFiles().then((files) => (reportFiles.current = files));
+  }, []);
+
+  const clearPdfStatus = () =>
+    setPdfStatus((prev) => {
+      if (prev.state === "done") URL.revokeObjectURL(prev.url);
+      return { state: "idle" };
+    });
 
   const onChange = useCallback((patch: Partial<CaseInput>) => setInput((prev) => ({ ...prev, ...patch })), []);
 
@@ -36,12 +74,46 @@ export default function Calculator() {
     setStarted(true);
     setCaseOpen(true);
     setNotice(null);
+    clearPdfStatus();
   };
 
   const goHome = () => {
     setEntries(loadHistory());
     setStarted(false);
     setNotice(null);
+    clearPdfStatus();
+  };
+
+  const exportPdf = () => {
+    if (result.status !== "ok" || pdfStatus.state === "generating") return;
+    if (pdfStatus.state === "done") URL.revokeObjectURL(pdfStatus.url);
+    // The case at the moment of the click, even if the screen changes while files load.
+    const params = { input, result };
+    const finish = (files: ReportFiles) => {
+      reportFiles.current = files;
+      const { blob, fileName, usedFallbackFont } = buildPdfReport(params, files);
+      const url = URL.createObjectURL(blob);
+      setPdfStatus({ state: "done", url, fileName, usedFallbackFont });
+      triggerDownload(url, fileName);
+    };
+    const fail = (err: unknown) => {
+      console.error(err);
+      setPdfStatus({ state: "error", message: err instanceof Error ? err.message : String(err) });
+    };
+
+    const files = reportFiles.current;
+    if (files?.fonts && files.logo) {
+      try {
+        finish(files);
+      } catch (err) {
+        fail(err);
+      }
+      return;
+    }
+    setPdfStatus({ state: "generating" });
+    preloadReportFiles()
+      .then(finish)
+      .catch(fail);
   };
 
   const save = () => {
@@ -67,6 +139,7 @@ export default function Calculator() {
   };
 
   const ok = result.status === "ok";
+  const pdfBlockedReason = result.status === "ok" ? null : PDF_BLOCKED_REASON[result.status];
 
   return (
     <div className="max-w-[1240px] mx-auto px-4 md:px-8 py-8 space-y-8">
@@ -84,7 +157,23 @@ export default function Calculator() {
         </div>
         {started && (
           <div className="flex flex-wrap items-center gap-3">
-            {/* Slot for the PDF and Excel exports (Tasks 9 and 10). */}
+            {pdfBlockedReason && (
+              <span id="pdf-blocked-reason" className="text-xs text-text-gray basis-full lg:basis-auto">
+                {pdfBlockedReason}
+              </span>
+            )}
+            {/* Slot for the Excel export (Task 10). */}
+            <button
+              type="button"
+              onClick={exportPdf}
+              disabled={!ok || pdfStatus.state === "generating"}
+              title={pdfBlockedReason ?? "Relatório em PDF com aspectos gerais, notas metodológicas e a memória de cálculo"}
+              aria-describedby={pdfBlockedReason ? "pdf-blocked-reason" : undefined}
+              className="btn-outline"
+            >
+              <Download className="w-4 h-4" />
+              Exportar PDF
+            </button>
             <button type="button" onClick={goHome} className="btn-outline">
               <ArrowLeft className="w-4 h-4" />
               Início
@@ -108,6 +197,40 @@ export default function Calculator() {
           <button type="button" onClick={() => setNotice(null)} aria-label="Fechar aviso" className="text-text-gray hover:text-ink cursor-pointer">
             <X className="w-4 h-4" />
           </button>
+        </div>
+      )}
+
+      {started && pdfStatus.state !== "idle" && (
+        <div
+          role="status"
+          className={`bg-white border border-rule border-l-[3px] rounded px-4 py-2.5 text-sm flex items-start gap-3 ${
+            pdfStatus.state === "error" ? "border-l-accent" : "border-l-secondary"
+          }`}
+        >
+          <p className={`flex-1 ${pdfStatus.state === "error" ? "text-accent" : "text-ink"}`}>
+            {pdfStatus.state === "generating" && "Gerando o relatório em PDF…"}
+            {pdfStatus.state === "done" && (
+              <>
+                Relatório gerado: {pdfStatus.fileName}.{" "}
+                {pdfStatus.usedFallbackFont && "A fonte Inter não carregou; o PDF saiu em Helvetica. "}
+                Se o download não começou,{" "}
+                <a href={pdfStatus.url} download={pdfStatus.fileName} className="text-action underline">
+                  baixe novamente
+                </a>{" "}
+                ou{" "}
+                <a href={pdfStatus.url} target="_blank" rel="noreferrer" className="text-action underline">
+                  abra em nova aba
+                </a>
+                .
+              </>
+            )}
+            {pdfStatus.state === "error" && `Não foi possível gerar o relatório: ${pdfStatus.message}`}
+          </p>
+          {pdfStatus.state !== "generating" && (
+            <button type="button" onClick={clearPdfStatus} aria-label="Fechar aviso" className="text-text-gray hover:text-ink cursor-pointer">
+              <X className="w-4 h-4" />
+            </button>
+          )}
         </div>
       )}
 
