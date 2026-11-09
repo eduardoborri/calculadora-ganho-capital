@@ -168,6 +168,33 @@ function formulaOf(value: unknown): string | null {
   return value !== null && typeof value === 'object' && 'formula' in value ? String((value as {formula: string}).formula) : null;
 }
 
+// fast-formula-parser 1.0.x has no MIN and MAX, and ROUND is only reached by the conference rows,
+// so these three are registered with Excel semantics. A parameter may come wrapped as
+// {value, isArray, isRangeRef, isCellRef, omitted}, as a plain value, or as a (nested) array from a
+// range. Only numbers count: empty cells, text and booleans in ranges are ignored.
+function numbersOf(param: unknown): number[] {
+  if (Array.isArray(param)) return param.flatMap(numbersOf);
+  if (param !== null && typeof param === 'object' && 'value' in param) return numbersOf((param as {value: unknown}).value);
+  return typeof param === 'number' && Number.isFinite(param) ? [param] : [];
+}
+
+// MIN and MAX of no numbers are 0, as in Excel.
+const extreme = (pick: (a: number, b: number) => number) => (...params: unknown[]) => {
+  const values = params.flatMap(numbersOf);
+  return values.length === 0 ? 0 : values.reduce((acc, v) => pick(acc, v));
+};
+
+// Half away from zero, after trimming binary noise to 15 significant digits.
+function excelRound(number: unknown, digits?: unknown): number {
+  const x = numbersOf(number)[0] ?? 0;
+  const d = digits === undefined ? 0 : (numbersOf(digits)[0] ?? 0);
+  const factor = 10 ** Math.trunc(d);
+  const magnitude = Math.round(Number((Math.abs(x) * factor).toPrecision(15))) / factor;
+  return x < 0 ? -magnitude : magnitude;
+}
+
+const EXCEL_FUNCTIONS = {MIN: extreme(Math.min), MAX: extreme(Math.max), ROUND: excelRound};
+
 function isError(value: unknown): boolean {
   const FormulaError = (FormulaParser as unknown as {FormulaError?: new () => unknown}).FormulaError;
   return value instanceof Error || (FormulaError !== undefined && value instanceof FormulaError);
@@ -184,6 +211,7 @@ function recalculator(ws: Sheet): (address: string) => unknown {
     return cache.get(k);
   };
   const parser = new FormulaParser({
+    functions: EXCEL_FUNCTIONS,
     onCell: ({row, col}: {row: number; col: number}) => cached(row, col),
     onRange: ({from, to}: {from: {row: number; col: number}; to: {row: number; col: number}}) => {
       const rows: unknown[][] = [];
