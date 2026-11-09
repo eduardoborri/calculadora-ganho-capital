@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ArrowLeft, Download, Save, X } from "lucide-react";
+import { ArrowLeft, Download, FileSpreadsheet, Save, X } from "lucide-react";
 import type { CaseInput, CaseStatus } from "../types";
 import { calculateCase, defaultCaseInput } from "../utils/capitalGain";
 import { clearHistory, loadHistory, removeEntry, saveEntry, type HistoryEntry } from "../utils/history";
 import { buildPdfReport, preloadReportFiles, type ReportFiles } from "../utils/pdfReport";
+import { generateXlsxReport, preloadExcel } from "../utils/xlsxReport";
 import AlertList from "./AlertList";
 import CalculationMemo from "./CalculationMemo";
 import CostTable from "./CostTable";
@@ -18,17 +19,22 @@ import ValueUpdateBlock from "./blocks/ValueUpdateBlock";
 
 type Notice = { kind: "ok" | "error"; text: string };
 
+type ReportKind = "pdf" | "xlsx";
+
+// One status for both exports: only one report is generated at a time.
 type PdfStatus =
   | { state: "idle" }
-  | { state: "generating" }
-  | { state: "done"; url: string; fileName: string; usedFallbackFont: boolean }
-  | { state: "error"; message: string };
+  | { state: "generating"; kind: ReportKind }
+  | { state: "done"; kind: ReportKind; url: string; fileName: string; usedFallbackFont: boolean }
+  | { state: "error"; kind: ReportKind; message: string };
 
-// Why the PDF button is off: only a complete, valid case in scope has a report.
+const REPORT_NAME: Record<ReportKind, string> = { pdf: "o relatório em PDF", xlsx: "a planilha" };
+
+// Why the export buttons are off: only a complete, valid case in scope has a report.
 const PDF_BLOCKED_REASON: Record<Exclude<CaseStatus, "ok">, string> = {
-  incompleto: "Preencha os dados pendentes para gerar o PDF.",
-  invalido: "Corrija os dados indicados na memória para gerar o PDF.",
-  fora_de_escopo: "Caso fora do escopo da ferramenta: sem PDF.",
+  incompleto: "Preencha os dados pendentes para gerar o PDF e a planilha.",
+  invalido: "Corrija os dados indicados na memória para gerar o PDF e a planilha.",
+  fora_de_escopo: "Caso fora do escopo da ferramenta: sem PDF e sem planilha.",
 };
 
 function triggerDownload(url: string, fileName: string) {
@@ -62,6 +68,7 @@ export default function Calculator() {
   const pdfRequest = useRef(0);
   useEffect(() => {
     preloadReportFiles().then((files) => (reportFiles.current = files));
+    preloadExcel().catch(() => {}); // retried on click
     return () => {
       pdfRequest.current += 1;
       if (pdfUrl.current) URL.revokeObjectURL(pdfUrl.current);
@@ -110,13 +117,13 @@ export default function Calculator() {
       const { blob, fileName, usedFallbackFont } = buildPdfReport(params, files);
       const url = URL.createObjectURL(blob);
       pdfUrl.current = url;
-      setPdfStatus({ state: "done", url, fileName, usedFallbackFont });
+      setPdfStatus({ state: "done", kind: "pdf", url, fileName, usedFallbackFont });
       triggerDownload(url, fileName);
     };
     const fail = (err: unknown) => {
       if (request !== pdfRequest.current) return;
       console.error(err);
-      setPdfStatus({ state: "error", message: err instanceof Error ? err.message : String(err) });
+      setPdfStatus({ state: "error", kind: "pdf", message: err instanceof Error ? err.message : String(err) });
     };
 
     // With the fonts cached, build now even without the logo: the report goes out without it
@@ -130,10 +137,31 @@ export default function Calculator() {
       }
       return;
     }
-    setPdfStatus({ state: "generating" });
+    setPdfStatus({ state: "generating", kind: "pdf" });
     preloadReportFiles()
       .then(finish)
       .catch(fail);
+  };
+
+  // Workbook with the whole calculation in Excel formulas. exceljs is preloaded on mount.
+  const exportXlsx = () => {
+    if (result.status !== "ok" || pdfStatus.state === "generating") return;
+    releasePdfUrl();
+    const request = ++pdfRequest.current;
+    setPdfStatus({ state: "generating", kind: "xlsx" });
+    generateXlsxReport({ input, result })
+      .then(({ blob, fileName }) => {
+        if (request !== pdfRequest.current) return; // the case was left or reopened meanwhile
+        const url = URL.createObjectURL(blob);
+        pdfUrl.current = url;
+        setPdfStatus({ state: "done", kind: "xlsx", url, fileName, usedFallbackFont: false });
+        triggerDownload(url, fileName);
+      })
+      .catch((err: unknown) => {
+        if (request !== pdfRequest.current) return;
+        console.error(err);
+        setPdfStatus({ state: "error", kind: "xlsx", message: err instanceof Error ? err.message : String(err) });
+      });
   };
 
   const save = () => {
@@ -182,7 +210,6 @@ export default function Calculator() {
                 {pdfBlockedReason}
               </span>
             )}
-            {/* Slot for the Excel export (Task 10). */}
             <button
               type="button"
               onClick={exportPdf}
@@ -193,6 +220,17 @@ export default function Calculator() {
             >
               <Download className="w-4 h-4" />
               Exportar PDF
+            </button>
+            <button
+              type="button"
+              onClick={exportXlsx}
+              disabled={!ok || pdfStatus.state === "generating"}
+              title={pdfBlockedReason ?? "Planilha Excel com a memória de cálculo completa, em fórmulas, e a conferência com a ferramenta"}
+              aria-describedby={pdfBlockedReason ? "pdf-blocked-reason" : undefined}
+              className="btn-outline"
+            >
+              <FileSpreadsheet className="w-4 h-4" />
+              Exportar planilha
             </button>
             <button type="button" onClick={goHome} className="btn-outline">
               <ArrowLeft className="w-4 h-4" />
@@ -228,23 +266,28 @@ export default function Calculator() {
           }`}
         >
           <p className={`flex-1 ${pdfStatus.state === "error" ? "text-accent" : "text-ink"}`}>
-            {pdfStatus.state === "generating" && "Gerando o relatório em PDF…"}
+            {pdfStatus.state === "generating" && `Gerando ${REPORT_NAME[pdfStatus.kind]}…`}
             {pdfStatus.state === "done" && (
               <>
-                Relatório gerado: {pdfStatus.fileName}.{" "}
+                {pdfStatus.kind === "pdf" ? "Relatório gerado" : "Planilha gerada"}: {pdfStatus.fileName}.{" "}
                 {pdfStatus.usedFallbackFont && "A fonte Inter não carregou; o PDF saiu em Helvetica. "}
                 Se o download não começou,{" "}
                 <a href={pdfStatus.url} download={pdfStatus.fileName} className="text-action underline">
                   baixe novamente
-                </a>{" "}
-                ou{" "}
-                <a href={pdfStatus.url} target="_blank" rel="noreferrer" className="text-action underline">
-                  abra em nova aba
                 </a>
+                {pdfStatus.kind === "pdf" && (
+                  <>
+                    {" "}
+                    ou{" "}
+                    <a href={pdfStatus.url} target="_blank" rel="noreferrer" className="text-action underline">
+                      abra em nova aba
+                    </a>
+                  </>
+                )}
                 .
               </>
             )}
-            {pdfStatus.state === "error" && `Não foi possível gerar o relatório: ${pdfStatus.message}`}
+            {pdfStatus.state === "error" && `Não foi possível gerar ${REPORT_NAME[pdfStatus.kind]}: ${pdfStatus.message}`}
           </p>
           {pdfStatus.state !== "generating" && (
             <button type="button" onClick={clearPdfStatus} aria-label="Fechar aviso" className="text-text-gray hover:text-ink cursor-pointer">
