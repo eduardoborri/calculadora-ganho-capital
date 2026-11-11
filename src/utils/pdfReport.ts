@@ -1,7 +1,7 @@
 import { jsPDF } from "jspdf";
 import { buildMemoLines, payableNote, receivedCostLine, type MemoLine } from "../components/memoLines";
 import { ACQUISITION_FORM_LABEL, OPERATION_LABEL, OWNERSHIP_LABEL, SALE_MODE_LABEL } from "../data/labels";
-import { ASPECTOS_GERAIS, NOTA_PERMUTA, NOTAS_METODOLOGICAS, SCHEDULE_NOTE_PRAZO } from "../data/textos";
+import { ASPECTOS_GERAIS, NOTA_PERMUTA, NOTAS_METODOLOGICAS, scheduleNotePrazo } from "../data/textos";
 import type { Alert, CaseInput, CaseResult, ExemptionCheck } from "../types";
 import { correctedCost, usesCostIndex } from "./capitalGain";
 import { filledItems } from "./costItems";
@@ -808,7 +808,7 @@ function calculationPages(r: Report, input: CaseInput, result: CaseResult, eyebr
     r.footnote(
       `${
         input.saleMode === "prazo"
-          ? SCHEDULE_NOTE_PRAZO
+          ? scheduleNotePrazo(permuta)
           : "Imposto do mês do contrato."
       } Vencimento no último dia útil do mês seguinte, considerados os feriados nacionais.`
     );

@@ -438,7 +438,12 @@ function buildSheet(ws: Sheet, input: CaseInput, result: CaseResult): Conference
   } else {
     line("V4", permuta ? "Corretagem paga pelo titular" : "Corretagem paga pelo vendedor", input.brokerage, MONEY,
       permuta ? "Deduzida da torna (IN SRF 84/2001, art. 19, § 4º)." : "Deduzida do valor de alienação (IN SRF 84/2001, art. 19, § 4º).", "input");
-    line("V5", permuta ? "Torna líquida" : "Valor de alienação líquido", f(`${V("V3")}-${V("V4")}`), MONEY, "V3 − V4.");
+    // Without torna nothing is deducted: the brokerage has no torna to come off (engine saleNet 0).
+    if (permuta) {
+      line("V5", "Torna líquida", f(`IF(${V("V3")}>0,${V("V3")}-${V("V4")},0)`), MONEY, "V3 − V4; zero sem torna (a corretagem não é deduzida).");
+    } else {
+      line("V5", "Valor de alienação líquido", f(`${V("V3")}-${V("V4")}`), MONEY, "V3 − V4.");
+    }
   }
 
   if (update) {
@@ -624,7 +629,7 @@ function buildSheet(ws: Sheet, input: CaseInput, result: CaseResult): Conference
       finish();
     });
     // In "prazo" the brokerage is in the installments of section 9: R1 is rewritten there.
-    line("R1", "Produto da venda, líquido de corretagem", f(V("V5")), MONEY,
+    line("R1", permuta ? "Torna, líquida de corretagem" : "Produto da venda, líquido de corretagem", f(V("V5")), MONEY,
       prazo ? "V5 − corretagem das parcelas (seção 9)." : "= V5.");
     line("R2", "Aplicado no prazo", appRows.length > 0 ? f(`SUM(${addr(appRows[0], 6)}:${addr(appRows[appRows.length - 1], 6)})`) : 0, MONEY,
       deadline ? `Soma da coluna F. Prazo: ${formatDate(deadline)}${input.reinvestment.moreThanOneSale ? ", contado do primeiro contrato" : ""}.` : "Soma da coluna F.");
@@ -733,7 +738,9 @@ function buildSheet(ws: Sheet, input: CaseInput, result: CaseResult): Conference
     const brokerageSum = instRows.length > 0 ? `SUM(${abs(instRows[0], 5)}:${abs(instRows[instRows.length - 1], 5)})` : "0";
     // R1 of section 7 (reinvestment) is net of the brokerage of the installments.
     if (R.R1) {
-      ws.getCell(R.R1, 3).value = f(`${V("V5")}-${brokerageSum}`);
+      ws.getCell(R.R1, 3).value = f(
+        permuta ? `IF(${V("V3")}>0,${V("V5")}-${brokerageSum},0)` : `${V("V5")}-${brokerageSum}`,
+      );
     }
 
     line("S1", permuta ? "Ganho tributável ÷ torna do titular" : "Ganho tributável ÷ valor de alienação do titular", f(`IF(${V("V3")}>0,${V("B2")}/${V("V3")},0)`), RATIO,

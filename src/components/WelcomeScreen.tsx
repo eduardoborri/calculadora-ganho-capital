@@ -38,7 +38,7 @@ function HistoryList({ entries, onOpen, onRemove, onClearAll }: Omit<WelcomeScre
           <thead className={stackHead}>
             <tr>
               <th className="table-header">Salvo em</th>
-              <th className="table-header text-right">Valor de alienação</th>
+              <th className="table-header text-right">Valor de alienação / torna</th>
               <th className="table-header text-right">Data da alienação</th>
               <th className="table-header w-40">
                 <span className="sr-only">Ações</span>
@@ -49,7 +49,7 @@ function HistoryList({ entries, onOpen, onRemove, onClearAll }: Omit<WelcomeScre
             {entries.map((entry) => (
               <tr key={entry.id} className={`hover:bg-paper/40 ${stackRow}`}>
                 <td data-label="Salvo em" className={`table-cell ${stackCell} max-sm:col-span-2`}>{formatSavedAt(entry.savedAt)}</td>
-                <td data-label="Valor de alienação" className={`table-cell text-right ${stackCell}`}>{saleCell(entry)}</td>
+                <td data-label="Valor de alienação / torna" className={`table-cell text-right ${stackCell}`}>{saleCell(entry)}</td>
                 <td data-label="Data da alienação" className={`table-cell text-right ${stackCell}`}>{entry.input.contractDate ? formatDate(entry.input.contractDate) : "—"}</td>
                 <td className="table-cell max-sm:col-span-2 max-sm:p-0 max-sm:border-0">
                   <div className="flex items-center justify-end gap-3 max-sm:justify-start">

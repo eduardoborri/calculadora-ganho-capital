@@ -21,6 +21,13 @@ export const NOTAS_METODOLOGICAS: string[] = [
 ];
 
 // Note of the installment schedule, on screen and in the PDF; the workbook spells it with its cells.
+// In a permuta com torna the installments are the torna's.
+export function scheduleNotePrazo(permuta: boolean): string {
+  return permuta
+    ? "Uma linha por mês de recebimento da torna. Ganho do mês = razão × (parcela da torna recebida − corretagem paga no mês), com razão = ganho total ÷ torna (IN SRF 84/2001, arts. 19, § 4º, e 31)."
+    : SCHEDULE_NOTE_PRAZO;
+}
+
 export const SCHEDULE_NOTE_PRAZO =
   "Uma linha por mês de recebimento. Ganho do mês = razão × (valor recebido − corretagem paga no mês), com razão = ganho total ÷ valor de alienação (IN SRF 84/2001, arts. 19, § 4º, e 31).";
 

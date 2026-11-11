@@ -1,4 +1,4 @@
-import { SCHEDULE_NOTE_PRAZO } from "../data/textos";
+import { scheduleNotePrazo } from "../data/textos";
 import type { SaleMode, ScheduleLine } from "../types";
 import { formatDate, money } from "../utils/format";
 import { stackBody, stackCell, stackFoot, stackHead, stackRow, stackTable, stackTotalCell, stackTotalRow } from "./shared/styles";
@@ -6,13 +6,14 @@ import { stackBody, stackCell, stackFoot, stackHead, stackRow, stackTable, stack
 interface ScheduleTableProps {
   schedule: ScheduleLine[];
   saleMode: SaleMode;
+  permuta?: boolean;
 }
 
 // "2026-03" → "03/2026".
 const formatMonth = (month: string) => month.split("-").reverse().join("/");
 
 // Payment schedule: one line per month with tax, due on the last business day of the next month.
-export default function ScheduleTable({ schedule, saleMode }: ScheduleTableProps) {
+export default function ScheduleTable({ schedule, saleMode, permuta = false }: ScheduleTableProps) {
   if (schedule.length === 0) return null;
   const total = (pick: (line: ScheduleLine) => number) => schedule.reduce((sum, line) => sum + pick(line), 0);
 
@@ -21,7 +22,7 @@ export default function ScheduleTable({ schedule, saleMode }: ScheduleTableProps
       <h2 className="section-title">Cronograma de pagamento</h2>
       <p className="text-sm text-text-gray leading-relaxed max-w-[72ch]">
         {saleMode === "prazo"
-          ? SCHEDULE_NOTE_PRAZO
+          ? scheduleNotePrazo(permuta)
           : "Imposto do mês do contrato."}{" "}
         Vencimento no último dia útil do mês seguinte, considerados os feriados nacionais.
       </p>

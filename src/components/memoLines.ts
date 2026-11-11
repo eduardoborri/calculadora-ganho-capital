@@ -232,7 +232,7 @@ function reinvestmentLine(input: CaseInput, result: CaseResult): MemoLine {
     label: "Parte tributada (art. 39)",
     value: formatPercent(taxedShare),
     detail: [
-      { label: "Produto da venda, líquido de corretagem", value: money(proceeds) },
+      { label: isPermuta(input) ? "Torna, líquida de corretagem" : "Produto da venda, líquido de corretagem", value: money(proceeds) },
       { label: deadline ? `Aplicado até ${formatDate(deadline)}` : "Aplicado no prazo", value: money(applied) },
       { label: `1 − ${money(applied)} ÷ ${money(proceeds)}, entre 0 e 1`, value: formatPercent(taxedShare) },
     ],
@@ -313,7 +313,8 @@ export function buildMemoLines(input: CaseInput, result: CaseResult): MemoLine[]
 // How the amount payable relates to the tax of the table, per sale mode.
 function modeNote(input: CaseInput, result: CaseResult): string | null {
   if (input.saleMode === "prazo") {
-    return "Venda a prazo: soma das linhas do cronograma. Cada parcela informada paga a sua proporção do imposto (IN SRF 84/2001, art. 31).";
+    const what = isPermuta(input) ? "Torna a prazo" : "Venda a prazo";
+    return `${what}: soma das linhas do cronograma. Cada parcela informada paga a sua proporção do imposto (IN SRF 84/2001, art. 31).`;
   }
   if (input.saleMode === "partes" && result.priorTaxPaid > 0) {
     return "Imposto da tabela sobre o total somado, menos o imposto já pago.";

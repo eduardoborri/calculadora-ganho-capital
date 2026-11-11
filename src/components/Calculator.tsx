@@ -323,7 +323,7 @@ export default function Calculator() {
             </div>
           </div>
 
-          {ok && <ScheduleTable schedule={result.schedule} saleMode={input.saleMode} />}
+          {ok && <ScheduleTable schedule={result.schedule} saleMode={input.saleMode} permuta={input.operation === "permuta"} />}
           {ok && <AlertList alerts={result.alerts} />}
         </div>
       )}

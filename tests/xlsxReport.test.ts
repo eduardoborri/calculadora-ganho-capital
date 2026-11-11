@@ -218,6 +218,16 @@ const CASES: [string, CaseInput][] = [
   ],
   ['permuta in a condominium of 50%', caso({...permutaOficial, ownership: 'condominio', quotaPct: 50, brokerage: 100})],
   ['permuta sem torna, with brokerage', caso({...permutaOficial, permuta: {torna: 0, receivedValue: 60000}, brokerage: 100})],
+  [
+    'permuta a prazo sem torna, with installment brokerage',
+    caso({
+      ...permutaOficial,
+      permuta: {torna: 0, receivedValue: 60000},
+      saleMode: 'prazo',
+      installments: [parcela('a', '2025-05-20', 5000, 200)],
+      reinvestment: reinv({applications: [{id: 'a', date: '2025-06-20', value: 1000, kind: 'aquisicao'}]}),
+    }),
+  ],
 ];
 
 const CONFERENCE_LABELS = ['Ganho bruto', 'Base tributável', 'Imposto pela tabela', 'Imposto a pagar', 'Soma do cronograma'];
@@ -489,6 +499,14 @@ describe('spreadsheet values', () => {
     const value = recalculator(ws);
     expect(value(valueCellOf(ws, 'VK')) as number).toBeCloseTo(20000 / 80000, 9);
     expect(value(valueCellOf(ws, 'G1')) as number).toBeCloseTo(20000 - 60000 * 0.25, 6);
+  });
+
+  it('permuta sem torna with brokerage: V5 is the engine saleNet, zero', () => {
+    const input = caso({...permutaOficial, permuta: {torna: 0, receivedValue: 60000}, brokerage: 100});
+    const {result, ws} = build(input);
+    const value = recalculator(ws);
+    expect(result.saleNet).toBe(0);
+    expect(value(valueCellOf(ws, 'V5')) as number).toBe(result.saleNet);
   });
 
   it('a sale has no permuta rows', () => {
