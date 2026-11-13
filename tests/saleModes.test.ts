@@ -473,7 +473,9 @@ describe('sale in parts', () => {
   it('with no prior parts it behaves as the first operation', () => {
     const r = calculateCase(caso({...partes, brokerage: 5000, costItems: custo}));
     const cash = calculateCase(caso({...base, brokerage: 5000, costItems: custo}));
-    expect(r).toEqual(cash);
+    // The cash sale also carries the "receipt in a later month" note, which is specific to "vista".
+    const noVistaNote = {...cash, alerts: cash.alerts.filter((a) => a.id !== 'vista-recebimento-posterior')};
+    expect(r).toEqual(noVistaNote);
   });
 
   it('other modes ignore prior parts left on the input', () => {
