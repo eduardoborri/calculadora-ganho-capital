@@ -44,6 +44,8 @@ describe('single property exemption', () => {
     expect(check.applies).toBe(false);
     expect(check.reasons).toHaveLength(1);
     expect(check.reasons[0]).toContain('5 anos');
+    expect(check.reasons[0]).toContain('Requisito não informado');
+    expect(check.reasons[0]).not.toContain('Marque');
   });
 
   it('without onlyProperty it is not exempt and explains', () => {
@@ -142,7 +144,8 @@ describe('small value exemption', () => {
     const check = checkSmallValue(caso({smallValue: {sameNatureMonthTotal: 10000, confirmed: false}}));
     expect(check.applies).toBe(false);
     expect(check.reasons).toHaveLength(1);
-    expect(check.reasons[0]).toContain('Confirme');
+    expect(check.reasons[0]).toContain('Requisito não informado');
+    expect(check.reasons[0]).not.toContain('na parte do titular');
   });
 
   it('an untouched block lists the requirement', () => {

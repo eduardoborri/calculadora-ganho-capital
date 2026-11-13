@@ -1,6 +1,7 @@
 import {afterEach, describe, expect, it, vi} from 'vitest';
 import {ASPECTOS_GERAIS} from '../src/data/textos';
-import {isAssetResponse, reportFileName} from '../src/utils/pdfReport';
+import {defaultCaseInput} from '../src/utils/capitalGain';
+import {isAssetResponse, pendingFields, PENDING, propertyText, reportFileName} from '../src/utils/pdfReport';
 
 describe('reportFileName', () => {
   afterEach(() => {
@@ -55,5 +56,21 @@ describe('isAssetResponse', () => {
     expect(isAssetResponse(response(true, 'text/html; charset=utf-8'))).toBe(false);
     expect(isAssetResponse(response(true, 'Text/HTML'))).toBe(false);
     expect(isAssetResponse(response(false, 'font/ttf'))).toBe(false);
+  });
+});
+
+describe('pending fields', () => {
+  const item = (id: string, description: string) => ({id, description, date: '2015-03-10', value: 1000, hasDocument: true});
+
+  it('a short property description and an item without description are pending', () => {
+    const input = {...defaultCaseInput(), propertyDescription: 'Apt', costItems: [item('a', 'Compra'), item('b', '  ')]};
+    expect(propertyText(input)).toBe(PENDING);
+    expect(pendingFields(input)).toEqual(['Descrição do imóvel (mínimo de 5 caracteres)', 'Descrição do item de custo 2']);
+  });
+
+  it('a described case has none', () => {
+    const input = {...defaultCaseInput(), propertyDescription: 'Apartamento 101', costItems: [item('a', 'Compra')]};
+    expect(propertyText(input)).toBe('Apartamento 101');
+    expect(pendingFields(input)).toEqual([]);
   });
 });

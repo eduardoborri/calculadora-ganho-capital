@@ -2,6 +2,7 @@
 // status "ok". Pure: the component only lays them out. Amounts go through money()
 // (formatCurrency of round2), factors through formatFactor (6 decimals).
 
+import { NOTA_CORRETAGEM } from "../data/textos";
 import type { CaseInput, CaseResult, ExemptionCheck, ItemReduction } from "../types";
 import { correctedCost, usesCostIndex } from "../utils/capitalGain";
 import { filledItems, natureText } from "../utils/costItems";
@@ -89,10 +90,10 @@ function saleLine(input: CaseInput, result: CaseResult): MemoLine {
   if (isPermuta(input)) return tornaLine(input, result);
   const detail: MemoDetail[] = [];
   if (input.ownership === "condominio") {
-    detail.push({ label: "Valor do imóvel inteiro", value: money(input.saleValue) });
+    detail.push({ label: "Preço da operação (imóvel inteiro)", value: money(input.saleValue) });
     detail.push({ label: `Quota do titular (${formatPercent(input.quotaPct / 100)})`, value: money(holderPart(input, input.saleValue)) });
   } else {
-    detail.push({ label: "Valor de alienação", value: money(input.saleValue) });
+    detail.push({ label: "Preço da operação", value: money(input.saleValue) });
   }
   if (input.saleMode !== "prazo" && input.brokerage > 0) {
     detail.push({ label: "Corretagem paga pelo titular", value: `− ${money(input.brokerage)}` });
@@ -100,13 +101,13 @@ function saleLine(input: CaseInput, result: CaseResult): MemoLine {
   return {
     key: "venda",
     operator: "",
-    label: "Valor de alienação",
+    label: input.saleMode === "prazo" ? "Preço da operação" : "Valor de alienação líquido",
     value: money(result.saleNet),
     detail,
     note:
       input.saleMode === "prazo"
-        ? "Venda a prazo: o valor fica bruto, e a corretagem sai da parcela do mês em que foi paga (IN SRF 84/2001, art. 19, § 4º)."
-        : "Preço efetivo menos a corretagem paga pelo vendedor (Lei 7.713/1988, art. 19; IN SRF 84/2001, art. 19, § 4º).",
+        ? `Venda a prazo: o valor fica bruto, e a corretagem sai da parcela do mês em que foi paga (IN SRF 84/2001, art. 19, § 4º). ${NOTA_CORRETAGEM}`
+        : `Preço da operação menos a corretagem paga pelo vendedor (Lei 7.713/1988, art. 19; IN SRF 84/2001, art. 19, § 4º). ${NOTA_CORRETAGEM}`,
   };
 }
 
@@ -143,7 +144,7 @@ function costLine(input: CaseInput, result: CaseResult, details: CostDetail[]): 
     updateNote ??
     (input.ownership === "condominio"
       ? "Itens do imóvel inteiro, na parte do titular. Custo até 31/12/1995 corrigido pelo Anexo Único (IN SRF 84/2001, art. 7º)."
-      : "Custo até 31/12/1995 corrigido pelo Anexo Único (IN SRF 84/2001, art. 7º); depois, sem correção (art. 8º).");
+      : `${input.ownership === "comunhao" ? "Itens do imóvel inteiro (bem comum, sem divisão entre os cônjuges). " : ""}Custo até 31/12/1995 corrigido pelo Anexo Único (IN SRF 84/2001, art. 7º); depois, sem correção (art. 8º).`);
   if (isPermuta(input)) return permutaCostLine(result, details, note);
   return {
     key: "custo",
@@ -189,12 +190,29 @@ function itemRows(item: ItemReduction, label: string): MemoDetail[] {
   ];
 }
 
+// pt-BR list of the reductions some item actually received: "art. 18, FR1 e FR2", "FR1 e FR2".
+export function appliedReductions(items: ItemReduction[]): string {
+  const names = [
+    items.some((item) => item.art18Pct > 0) ? "art. 18" : "",
+    items.some((item) => item.m1 > 0) ? "FR1" : "",
+    items.some((item) => item.m2 > 0) ? "FR2" : "",
+  ].filter(Boolean);
+  if (names.length <= 1) return names.join("");
+  return `${names.slice(0, -1).join(", ")} e ${names[names.length - 1]}`;
+}
+
+// "Reduções (FR1 e FR2)", or "Reduções" when no item received any.
+export function reductionsLabel(items: ItemReduction[]): string {
+  const applied = appliedReductions(items);
+  return applied ? `Reduções (${applied})` : "Reduções";
+}
+
 function reductionLine(result: CaseResult, details: CostDetail[]): MemoLine {
   const labelById = new Map(details.map((d) => [d.id, d.label]));
   return {
     key: "reducoes",
     operator: "−",
-    label: "Reduções (art. 18, FR1 e FR2)",
+    label: reductionsLabel(result.items),
     value: money(result.grossGain - result.gainAfterReductions),
     detail: result.items.flatMap((item) => itemRows(item, labelById.get(item.itemId) ?? "Imóvel (custo zero)")),
     note: "Ganho rateado pelo peso de cada item no custo. Cada redução incide sobre o saldo anterior (IN SRF 599/2005, art. 3º, §§ 2º a 5º). m1 conta de jan/1996, ou do mês de aquisição, até nov/2005; m2, de dez/2005, ou do mês de aquisição, até o mês da alienação, inclusive.",
@@ -256,7 +274,7 @@ function taxLine(input: CaseInput, result: CaseResult): MemoLine {
       value: money(b.tax),
     })),
     note: summed
-      ? `Alienação em partes: a tabela incide sobre o total somado de ${money(totalGain)} (esta operação e as partes anteriores no prazo). Lei 8.981/1995, art. 21.`
+      ? `Alienação em partes: a tabela incide sobre o total somado de ${money(totalGain)} (esta operação e as partes anteriores até o fim do ano-calendário seguinte ao da primeira). Lei 8.981/1995, art. 21, § 3º.`
       : "Tabela progressiva por faixa sobre a base (Lei 8.981/1995, art. 21).",
   };
 }

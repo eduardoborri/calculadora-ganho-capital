@@ -12,7 +12,9 @@ function ExemptionStatus({ check, ready }: { check: ExemptionCheck; ready: boole
   if (check.applies) return <p className="text-sm font-semibold text-secondary-ink">Isenção aplicável: o ganho fica isento.</p>;
   return (
     <div className="space-y-1">
-      <p className="text-xs font-semibold text-text-gray">Não aplicada. Requisitos faltantes:</p>
+      <p className="text-xs font-semibold text-text-gray">
+        Não aplicada. Marque acima os requisitos atendidos; pendências:
+      </p>
       <ul className="list-disc pl-5 space-y-0.5 text-xs text-ink leading-snug">
         {check.reasons.map((reason) => (
           <li key={reason}>{reason}</li>
@@ -28,6 +30,7 @@ export default function ExemptionsBlock({ input, onChange, result }: BlockWithRe
     smallValue.confirmed || smallValue.sameNatureMonthTotal > 0 || singleProperty.onlyProperty || singleProperty.noSaleIn5Years;
   const [open, setOpen] = useState(touched);
   const ready = result.status === "ok";
+  const condo = input.ownership === "condominio";
   const anyApplies = ready && (result.exemption.small.applies || result.exemption.single.applies);
 
   const control = (
@@ -45,20 +48,24 @@ export default function ExemptionsBlock({ input, onChange, result }: BlockWithRe
       summary={
         anyApplies
           ? "Isenção aplicável a este caso. Abra o bloco para ver os requisitos."
-          : `Pequeno valor (até ${formatCurrency(SMALL_VALUE_LIMIT)} no mês) e único imóvel (até ${formatCurrency(SINGLE_PROPERTY_LIMIT)}). Só valem com todos os requisitos marcados.`
+          : `Pequeno valor (até ${formatCurrency(SMALL_VALUE_LIMIT)} no mês) e único imóvel (até ${formatCurrency(SINGLE_PROPERTY_LIMIT)}, sem outra alienação de imóvel nos últimos 5 anos). Só valem com todos os requisitos marcados.`
       }
     >
       <div className="space-y-3">
         <h3 className="text-sm font-semibold text-primary">Bem de pequeno valor (IN SRF 599/2005, art. 1º)</h3>
         <MoneyField
-          label="Total de bens da mesma natureza alienados no mês (parte do titular)"
+          label={`Total de bens da mesma natureza alienados no mês (${condo ? "parte do titular" : "do imóvel inteiro"})`}
           value={smallValue.sameNatureMonthTotal}
           onChange={(sameNatureMonthTotal) => onChange({ smallValue: { ...smallValue, sameNatureMonthTotal } })}
-          hint="Inclui esta venda. Informe só a parte do titular; o valor não é ajustado pela quota."
+          hint={
+            condo
+              ? "Inclui esta venda, pelo preço bruto. Informe só a parte do titular; o valor não é ajustado pela quota."
+              : "Inclui esta venda, pelo preço bruto."
+          }
           className="max-w-md"
         />
         <CheckField
-          label={`Confirmo que o total do mês, na parte do titular, não passa de ${formatCurrency(SMALL_VALUE_LIMIT)}`}
+          label={`Confirmo que o total do mês${condo ? ", na parte do titular," : ""} não passa de ${formatCurrency(SMALL_VALUE_LIMIT)}`}
           checked={smallValue.confirmed}
           onChange={(confirmed) => onChange({ smallValue: { ...smallValue, confirmed } })}
         />
@@ -78,7 +85,9 @@ export default function ExemptionsBlock({ input, onChange, result }: BlockWithRe
           onChange={(noSaleIn5Years) => onChange({ singleProperty: { ...singleProperty, noSaleIn5Years } })}
         />
         <p className="text-xs text-text-gray leading-snug">
-          O limite de {formatCurrency(SINGLE_PROPERTY_LIMIT)} compara o valor de alienação do titular, antes da corretagem.
+          Requisitos: único imóvel do alienante, alienado por até {formatCurrency(SINGLE_PROPERTY_LIMIT)}, e nenhuma outra alienação
+          de imóvel, tributada ou não, nos últimos 5 anos. O limite compara o preço da operação
+          {condo ? ", na parte do titular," : ""} antes da corretagem.
         </p>
         <ExemptionStatus check={result.exemption.single} ready={ready} />
       </div>

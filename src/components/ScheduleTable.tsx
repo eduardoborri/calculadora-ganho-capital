@@ -1,4 +1,4 @@
-import { scheduleNotePrazo } from "../data/textos";
+import { SCHEDULE_NOTE_COMUNHAO, scheduleNotePrazo } from "../data/textos";
 import type { SaleMode, ScheduleLine } from "../types";
 import { formatDate, money } from "../utils/format";
 import { stackBody, stackCell, stackFoot, stackHead, stackRow, stackTable, stackTotalCell, stackTotalRow } from "./shared/styles";
@@ -7,13 +7,15 @@ interface ScheduleTableProps {
   schedule: ScheduleLine[];
   saleMode: SaleMode;
   permuta?: boolean;
+  // Marital community: an extra column with each spouse's Darf, half the tax.
+  comunhao?: boolean;
 }
 
 // "2026-03" → "03/2026".
 const formatMonth = (month: string) => month.split("-").reverse().join("/");
 
 // Payment schedule: one line per month with tax, due on the last business day of the next month.
-export default function ScheduleTable({ schedule, saleMode, permuta = false }: ScheduleTableProps) {
+export default function ScheduleTable({ schedule, saleMode, permuta = false, comunhao = false }: ScheduleTableProps) {
   if (schedule.length === 0) return null;
   const total = (pick: (line: ScheduleLine) => number) => schedule.reduce((sum, line) => sum + pick(line), 0);
 
@@ -23,8 +25,8 @@ export default function ScheduleTable({ schedule, saleMode, permuta = false }: S
       <p className="text-sm text-text-gray leading-relaxed max-w-[72ch]">
         {saleMode === "prazo"
           ? scheduleNotePrazo(permuta)
-          : "Imposto do mês do contrato."}{" "}
-        Vencimento no último dia útil do mês seguinte, considerados os feriados nacionais e o dia 31/12, sem expediente bancário.
+          : "Imposto do mês da alienação."}{" "}
+        Vencimento no último dia útil do mês seguinte, considerados os feriados nacionais e o dia 31/12, sem expediente bancário.{comunhao ? ` ${SCHEDULE_NOTE_COMUNHAO}` : ""}
       </p>
       <div className="card">
         <div className="overflow-x-auto">
@@ -35,6 +37,7 @@ export default function ScheduleTable({ schedule, saleMode, permuta = false }: S
                 <th className="table-header text-right">Valor recebido</th>
                 <th className="table-header text-right">Ganho do mês</th>
                 <th className="table-header text-right">Imposto</th>
+                {comunhao && <th className="table-header text-right">Por cônjuge (50%)</th>}
                 <th className="table-header text-right">Vencimento</th>
               </tr>
             </thead>
@@ -56,6 +59,11 @@ export default function ScheduleTable({ schedule, saleMode, permuta = false }: S
                   >
                     {money(line.tax)}
                   </td>
+                  {comunhao && (
+                    <td data-label="Por cônjuge (50%)" className={`table-cell text-right ${stackCell} max-sm:order-6 max-sm:col-span-2`}>
+                      {money(line.tax / 2)}
+                    </td>
+                  )}
                   <td data-label="Vencimento" className={`table-cell text-right ${stackCell} max-sm:order-2`}>
                     {formatDate(line.dueDate)}
                   </td>
@@ -69,6 +77,9 @@ export default function ScheduleTable({ schedule, saleMode, permuta = false }: S
                   <td data-label="Valor recebido" className={`text-right ${stackTotalCell}`}>{money(total((l) => l.received))}</td>
                   <td data-label="Ganho do mês" className={`text-right ${stackTotalCell}`}>{money(total((l) => l.gain))}</td>
                   <td data-label="Imposto" className={`text-right ${stackTotalCell}`}>{money(total((l) => l.tax))}</td>
+                  {comunhao && (
+                    <td data-label="Por cônjuge (50%)" className={`text-right ${stackTotalCell}`}>{money(total((l) => l.tax) / 2)}</td>
+                  )}
                   <td className="max-sm:hidden"></td>
                 </tr>
               </tfoot>

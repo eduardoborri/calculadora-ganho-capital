@@ -9,7 +9,9 @@ import {
   SMALL_VALUE_LIMIT,
   TAX_BRACKETS,
 } from "../constants";
+import { reductionsLabel } from "../components/memoLines";
 import { costIndex } from "../data/custoAte1995";
+import { NOTA_CORRETAGEM } from "../data/textos";
 import { ACQUISITION_FORM_LABEL, OPERATION_LABEL, OWNERSHIP_LABEL, SALE_MODE_LABEL } from "../data/labels";
 import type { CaseInput, CaseResult, CostItem, ItemReduction } from "../types";
 import { art18Percent, countM1, countM2, usesCostIndex } from "./capitalGain";
@@ -373,7 +375,7 @@ function buildSheet(ws: Sheet, input: CaseInput, result: CaseResult): Conference
     "Lei 11.196/2005, art. 39; IN SRF 599/2005, art. 2º: o dia 180 conta, o 181 não. Informativo: cada aplicação entra como dentro ou fora do prazo na seção 7.", "info");
   const qualitative: [string, string][] = [
     ["Q1", "Art. 18 da Lei 7.713/1988: redução de 5 pontos percentuais por ano de aquisição, de 100% até 1969 a 5% em 1988; sem redução para aquisição a partir de 1989. Percentual por item na coluna E da seção 5."],
-    ["Q2", "m1 conta de jan/1996, ou do mês de aquisição se posterior, até nov/2005, só para item até nov/2005. m2 conta de dez/2005, ou do mês de aquisição se posterior, até o mês da alienação. Os dois contam o mês inicial e o final (Perguntão IRPF 2026, pergunta 649)."],
+    ["Q2", "m1 conta de jan/1996, ou do mês de aquisição se posterior, até nov/2005, só para item até nov/2005. m2 conta de dez/2005, ou do mês de aquisição se posterior, até o mês da alienação. Os dois contam o mês inicial e o final (exemplo oficial do Perguntão, numeração da edição citada; confira na edição vigente)."],
     ["Q3", "O ganho é rateado pelo peso de cada item no custo; art. 18, FR1 e FR2 incidem em sequência, cada um sobre o saldo anterior (IN SRF 599/2005, art. 3º, §§ 2º a 5º). Custo total zero: todo o ganho usa a data de aquisição do imóvel."],
     ["Q4", "Custo até 31/12/1995: valor original dividido pelo índice do Anexo Único da IN SRF 84/2001 (art. 7º); custo a partir de 1996 sem correção (art. 8º)."],
     ["Q5", "Imposto pela tabela progressiva, por faixa, sobre a base final (Lei 8.981/1995, art. 21, com a redação da Lei 13.259/2016). Contas em precisão total; arredondamento em duas casas só na conferência."],
@@ -399,7 +401,7 @@ function buildSheet(ws: Sheet, input: CaseInput, result: CaseResult): Conference
   if (year) textRow("Ano-calendário", String(year));
   textRow("Imóvel", `${input.propertyDescription.trim() || "não descrito"}${input.residential ? " (residencial)" : ""}`);
   textRow("Data de aquisição", `${formatDate(input.acquisitionDate)} – ${ACQUISITION_FORM_LABEL[input.acquisitionForm]}`);
-  textRow("Data da alienação (contrato)", formatDate(input.contractDate));
+  textRow("Data da alienação", formatDate(input.contractDate));
   if (permuta) textRow("Operação", OPERATION_LABEL[input.operation]);
   textRow(permuta ? "Forma de recebimento da torna" : "Modalidade da venda", SALE_MODE_LABEL[input.saleMode]);
   textRow("Titularidade", OWNERSHIP_LABEL[input.ownership]);
@@ -411,9 +413,11 @@ function buildSheet(ws: Sheet, input: CaseInput, result: CaseResult): Conference
     line("V6", "Valor do imóvel recebido (operação inteira)", input.permuta.receivedValue, MONEY,
       "Usado só nos limites de pequeno valor e do único imóvel (Perguntão IRPF 2026, pergunta 681).", "input");
   } else {
-    line("V1", "Valor de alienação do imóvel inteiro", input.saleValue, MONEY, "Preço efetivo da operação (Lei 7.713/1988, art. 19).", "input");
+    line("V1", "Preço da operação (imóvel inteiro)", input.saleValue, MONEY, "Preço efetivo da operação, bruto de corretagem (Lei 7.713/1988, art. 19).", "input");
   }
-  const holderLabel = permuta ? "Torna do titular" : "Valor de alienação do titular";
+  const holderLabel = permuta
+    ? condominio ? "Torna do titular" : "Torna"
+    : condominio ? "Preço da operação do titular" : "Preço da operação considerado";
   if (condominio) {
     line("V2", "Quota do titular (%)", input.quotaPct, QUOTA,
       `Condomínio: ${permuta ? "torna, imóvel recebido" : "valor de alienação"} e custo na parte do titular (IN SRF 84/2001, art. 19, IV).`, "input");
@@ -421,7 +425,7 @@ function buildSheet(ws: Sheet, input: CaseInput, result: CaseResult): Conference
   } else {
     const why =
       input.ownership === "comunhao"
-        ? "Bem comum do casamento: o bem inteiro (IN SRF 84/2001, art. 22). O imposto pode ser recolhido 50% em nome de cada cônjuge ou pela totalidade em nome de um deles (art. 30, § 2º)."
+        ? "Bem comum do casamento: ganho apurado sobre o imóvel inteiro, sem divisão prévia, com a tabela sobre o total; cada cônjuge recolhe Darf de 50% do imposto (Solução de Consulta Cosit nº 161/2026; IN SRF 84/2001, art. 22, c/c art. 30, § 2º)."
         : "Titularidade exclusiva: o bem inteiro.";
     line("V3", holderLabel, f(V("V1")), MONEY, `= V1. ${why}`);
   }
@@ -435,7 +439,7 @@ function buildSheet(ws: Sheet, input: CaseInput, result: CaseResult): Conference
       "V3 ÷ (KT + V3), sobre os valores do titular; zero sem torna (Perguntão IRPF 2026, pergunta 632; RIR/2018, art. 132, II).");
   }
   if (prazo) {
-    line("V5", permuta ? "Torna considerada" : "Valor de alienação considerado", f(V("V3")), MONEY,
+    line("V5", permuta ? "Torna considerada" : "Preço da operação considerado (bruto)", f(V("V3")), MONEY,
       `= V3. ${permuta ? "Torna a prazo" : "Venda a prazo"}: o valor fica bruto, e a corretagem sai da parcela do mês em que foi paga (IN SRF 84/2001, art. 19, § 4º; seção 9).`);
   } else {
     line("V4", permuta ? "Corretagem paga pelo titular" : "Corretagem paga pelo vendedor", input.brokerage, MONEY,
@@ -444,7 +448,7 @@ function buildSheet(ws: Sheet, input: CaseInput, result: CaseResult): Conference
     if (permuta) {
       line("V5", "Torna líquida", f(`IF(${V("V3")}>0,${V("V3")}-${V("V4")},0)`), MONEY, "V3 − V4; zero sem torna (a corretagem não é deduzida).");
     } else {
-      line("V5", "Valor de alienação líquido", f(`${V("V3")}-${V("V4")}`), MONEY, "V3 − V4.");
+      line("V5", "Valor de alienação líquido", f(`${V("V3")}-${V("V4")}`), MONEY, `V3 − V4. ${NOTA_CORRETAGEM}`);
     }
   }
 
@@ -561,7 +565,7 @@ function buildSheet(ws: Sheet, input: CaseInput, result: CaseResult): Conference
   }
 
   // ---------------------------------------------------------------- 5. reduções
-  section("5. REDUÇÕES POR ITEM (ART. 18, FR1 E FR2)");
+  section(`5. ${reductionsLabel(result.items).toUpperCase()} POR ITEM`);
   header([
     [1, "Ref."], [2, "Item"], [3, "Peso no custo"], [4, "Ganho rateado"], [5, "Art. 18 (%)"], [6, "Após art. 18"],
     [7, "m1"], [8, "FR1"], [9, "Após FR1"], [10, "m2"], [11, "FR2"], [12, "Ganho reduzido"], [13, "Observação"],
@@ -589,7 +593,7 @@ function buildSheet(ws: Sheet, input: CaseInput, result: CaseResult): Conference
     const text =
       `Data usada nas reduções: ${formatDate(cr.factorDate)}` +
       `${cr.factorDate !== cr.date ? ` (parcela do preço: data de aquisição; item em ${formatDate(cr.date)})` : ""}. Art. 18: Lei 7.713/1988 (Q1). m1 e m2 contam o mês inicial e o final ` +
-      `(Perguntão IRPF 2026, pergunta 649).${input.landRule && !update ? " Com a regra do terreno (Q6)." : ""}`;
+      `(exemplo oficial do Perguntão; confira a numeração na edição vigente).${input.landRule && !update ? " Com a regra do terreno (Q6)." : ""}`;
     note(r, text, 13);
     finish(34);
   });
@@ -750,7 +754,7 @@ function buildSheet(ws: Sheet, input: CaseInput, result: CaseResult): Conference
       );
     }
 
-    line("S1", permuta ? "Ganho tributável ÷ torna do titular" : "Ganho tributável ÷ valor de alienação do titular", f(`IF(${V("V3")}>0,${V("B2")}/${V("V3")},0)`), RATIO,
+    line("S1", permuta ? "Ganho tributável ÷ torna" : "Ganho tributável ÷ preço da operação", f(`IF(${V("V3")}>0,${V("B2")}/${V("V3")},0)`), RATIO,
       "B2 ÷ V3: ganho da parcela = ganho total ÷ valor total × parcela (IN SRF 84/2001, art. 31; Perguntão, pergunta 668).");
     line("S2", "Imposto ÷ ganho tributável", f(`IF(${V("B2")}>0,${V("B4")}/${V("B2")},0)`), RATIO,
       "B4 ÷ B2: o imposto sai da tabela sobre o ganho total, e cada parcela paga a sua proporção.");
@@ -816,7 +820,7 @@ function buildSheet(ws: Sheet, input: CaseInput, result: CaseResult): Conference
     formulaCell(r, 4, V("B2"), MONEY);
     formulaCell(r, 5, V("B8"), MONEY, true);
     put(r, 6, formatDate(lastBusinessDayOfNextMonth(`${month}-01`)), { align: "center" });
-    note(r, "Uma linha no mês do contrato: o imposto a pagar (B8), até o último dia útil do mês seguinte.", 7);
+    note(r, "Uma linha no mês da alienação: o imposto a pagar (B8), até o último dia útil do mês seguinte.", 7);
     finish();
     R.ST = row;
     put(row, 1, "ST", { bold: true, color: DARK, align: "center", fill: TOTAL_FILL });

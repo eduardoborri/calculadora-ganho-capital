@@ -28,7 +28,11 @@ export function operationTotal(input: CaseInput): number {
 
 // pt-BR name of the amount received, for messages, with its article ("a torna") or, with
 // `contracted`, the preposition "de" joined to it ("da torna").
+// Only a condominium has a holder's part; exclusive ownership and marital community take the whole
+// property (IN SRF 84/2001, art. 22).
 export function receivedLabel(input: CaseInput, contracted = false): string {
-  if (isPermuta(input)) return `${contracted ? "da" : "a"} torna do titular`;
-  return `${contracted ? "do" : "o"} valor de alienação do titular`;
+  const condo = input.ownership === "condominio";
+  if (isPermuta(input)) return `${contracted ? "da" : "a"} torna${condo ? " do titular" : ""}`;
+  return `${contracted ? "do" : "o"} valor de alienação ${condo ? "do titular" : "do imóvel"}`;
 }
+

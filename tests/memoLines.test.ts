@@ -1,5 +1,11 @@
 import {describe, expect, it} from 'vitest';
-import {buildMemoLines, EXCESS_DEDUCTION_NOTE, payableNote, receivedCostLine} from '../src/components/memoLines';
+import {
+  buildMemoLines,
+  EXCESS_DEDUCTION_NOTE,
+  payableNote,
+  receivedCostLine,
+  reductionsLabel,
+} from '../src/components/memoLines';
 import {calculateCase, defaultCaseInput} from '../src/utils/capitalGain';
 import type {CaseInput, CostItem, PriorPart} from '../src/types';
 
@@ -81,6 +87,27 @@ describe('permuta com torna no memorial', () => {
     const venda = caso({...permuta, operation: 'venda', saleValue: 70000});
     const rv = calculateCase(venda);
     expect(receivedCostLine(venda, rv)).toBeNull();
-    expect(buildMemoLines(venda, rv)[0].label).toBe('Valor de alienação');
+    expect(buildMemoLines(venda, rv)[0].label).toBe('Valor de alienação líquido');
+  });
+});
+
+describe('review labels', () => {
+  const venda = caso({...partes, saleMode: 'vista' as const, saleValue: 1500000});
+
+  it('lists only the reductions applied', () => {
+    const r = calculateCase(venda);
+    expect(reductionsLabel(r.items)).toBe('Reduções (FR2)');
+    const old = caso({...venda, acquisitionDate: '1985-03-10', costItems: [item('compra', '1985-03-10', 900000)]});
+    expect(reductionsLabel(calculateCase(old).items)).toBe('Reduções (art. 18, FR1 e FR2)');
+  });
+
+  it('shows the nature and the date used in the cost line', () => {
+    const input = caso({
+      ...venda,
+      costItems: [{...item('saldo', '2018-06-10', 900000), nature: 'preco'}],
+    });
+    const r = calculateCase(input);
+    const custo = buildMemoLines(input, r)[1];
+    expect(custo.detail[0].label).toContain('Parcela do preço; reduções pela data 10/03/2015');
   });
 });

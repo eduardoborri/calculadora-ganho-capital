@@ -136,7 +136,8 @@ export function correctedCost(item: CostItem): number {
 const OUT_OF_SCOPE_REASONS: Record<OutOfScope, string> = {
   nao_residente: "Alienante não residente no Brasil: caso fora do escopo da ferramenta.",
   pessoa_juridica: "Alienante pessoa jurídica: caso fora do escopo da ferramenta.",
-  rural_terra_nua: "Imóvel rural com regra de terra nua: caso fora do escopo da ferramenta.",
+  rural_terra_nua:
+    "Imóvel rural: fora do escopo da ferramenta. O ganho na alienação de imóvel rural segue o valor da terra nua (VTN, informado no Diat), por regra própria (Lei 9.393/1996, art. 19).",
   exterior: "Imóvel no exterior: caso fora do escopo da ferramenta.",
   moeda_estrangeira: "Operação em moeda estrangeira: caso fora do escopo da ferramenta.",
 };

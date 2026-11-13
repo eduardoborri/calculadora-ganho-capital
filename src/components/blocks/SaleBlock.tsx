@@ -1,4 +1,5 @@
 import { labelOptions, OPERATION_LABEL, SALE_MODE_LABEL } from "../../data/labels";
+import { NOTA_CORRETAGEM } from "../../data/textos";
 import type { Installment, PriorPart, SaleMode } from "../../types";
 import { formatCurrency, formatPercent, round2 } from "../../utils/format";
 import { holderPart, isPermuta, saleShare } from "../../utils/holder";
@@ -12,11 +13,11 @@ const MODES = labelOptions(SALE_MODE_LABEL);
 const OPERATIONS = labelOptions(OPERATION_LABEL);
 
 const MODE_HINTS: Record<SaleMode, string> = {
-  vista: "Ganho e imposto apurados no mês do contrato.",
+  vista: "Ganho e imposto apurados no mês da alienação.",
   prazo:
     "Ganho apurado como à vista; cada parcela recebida paga a sua proporção do imposto (IN SRF 84/2001, art. 31). A corretagem vai na parcela do mês em que foi paga.",
   partes:
-    "A partir da segunda operação feita até o fim do ano-calendário seguinte ao da primeira, os ganhos se somam, a tabela vale para o total e o imposto já pago é deduzido.",
+    "A partir da segunda operação feita até o fim do ano-calendário seguinte ao da primeira, os ganhos se somam, a tabela vale para o total e o imposto já pago é deduzido (Lei 8.981/1995, art. 21, § 3º).",
 };
 
 // In a permuta "a prazo" means the torna received in installments.
@@ -159,10 +160,10 @@ function ValueFields({ input, onChange }: BlockProps) {
   if (!isPermuta(input)) {
     return (
       <MoneyField
-        label="Valor de alienação (imóvel inteiro)"
+        label="Preço da operação (imóvel inteiro)"
         value={input.saleValue}
         onChange={(saleValue) => onChange({ saleValue })}
-        tooltip="Preço efetivo da operação (Lei 7.713/1988, art. 19)."
+        tooltip="Preço efetivo da operação, bruto de corretagem (Lei 7.713/1988, art. 19). A calculadora deduz a corretagem para chegar ao valor de alienação líquido."
         hint={quotaHint(input, input.saleValue)}
       />
     );
@@ -200,7 +201,7 @@ export default function SaleBlock({ input, onChange }: BlockProps) {
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <DateField
-          label="Data da alienação (contrato)"
+          label="Data da alienação"
           value={input.contractDate}
           onChange={(contractDate) => onChange({ contractDate })}
         />
@@ -215,7 +216,7 @@ export default function SaleBlock({ input, onChange }: BlockProps) {
                 ? "Na permuta, a corretagem paga pelo titular sai da torna (IN SRF 84/2001, art. 19, § 4º)."
                 : "Corretagem paga pelo vendedor sai do valor de alienação (IN SRF 84/2001, art. 19, § 4º)."
             }
-            hint="O que o titular pagou; não é ajustada pela quota."
+            hint={`O que o titular pagou; não é ajustada pela quota. ${NOTA_CORRETAGEM}`}
           />
         )}
       </div>

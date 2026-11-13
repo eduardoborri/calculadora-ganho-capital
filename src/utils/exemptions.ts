@@ -11,6 +11,11 @@ import {addDays, addYears, isValidDate} from "./dates";
 import {money} from "./format";
 import {isPermuta, operationTotal} from "./holder";
 
+// Reasons say whether a requirement was not informed (a box left unchecked) or is not met by the
+// figures. They describe; the instruction to check a box stays on screen.
+const NOT_INFORMED = "Requisito não informado";
+const NOT_MET = "Requisito não atendido";
+
 function permutaTotalNote(input: CaseInput): string {
   return isPermuta(input) ? " Na permuta, conta o valor total da operação: torna mais imóvel recebido." : "";
 }
@@ -24,15 +29,15 @@ export function checkSmallValue(input: CaseInput): ExemptionCheck {
   const reasons: string[] = [];
   if (!confirmed) {
     reasons.push(
-      `Confirme que o total de bens da mesma natureza alienados no mês, na parte do titular, não passa de ${money(SMALL_VALUE_LIMIT)}.`,
+      `${NOT_INFORMED}: total de bens da mesma natureza alienados no mês${input.ownership === "condominio" ? ", na parte do titular," : ""} até ${money(SMALL_VALUE_LIMIT)}.`,
     );
   }
   const effective = Math.max(total, operationTotal(input));
   if (!Number.isFinite(total) || total < 0) {
-    reasons.push("Informe um total válido de bens da mesma natureza alienados no mês.");
+    reasons.push(`${NOT_INFORMED}: total válido de bens da mesma natureza alienados no mês.`);
   } else if (effective > SMALL_VALUE_LIMIT) {
     reasons.push(
-      `O total de bens da mesma natureza no mês (${money(effective)}) supera o limite de ${money(SMALL_VALUE_LIMIT)}.${permutaTotalNote(input)}`,
+      `${NOT_MET}: o total de bens da mesma natureza no mês, pelo preço bruto (${money(effective)}), supera o limite de ${money(SMALL_VALUE_LIMIT)}.${permutaTotalNote(input)}`,
     );
   }
   return {applies: reasons.length === 0, reasons};
@@ -55,22 +60,23 @@ function hasRecentPriorPart(input: CaseInput): boolean {
 export function checkSingleProperty(input: CaseInput): ExemptionCheck {
   const {onlyProperty, noSaleIn5Years} = input.singleProperty;
   const reasons: string[] = [];
-  if (!onlyProperty) reasons.push("Marque que este é o único imóvel do alienante.");
+  if (!onlyProperty) reasons.push(`${NOT_INFORMED}: único imóvel do alienante.`);
   if (!noSaleIn5Years) {
     reasons.push(
-      `Marque que o alienante não vendeu outro imóvel, tributado ou não, nos últimos ${SINGLE_PROPERTY_LOCK_YEARS} anos.`,
+      `${NOT_INFORMED}: nenhuma outra alienação de imóvel, tributada ou não, nos últimos ${SINGLE_PROPERTY_LOCK_YEARS} anos.`,
     );
   }
   if (hasRecentPriorPart(input)) {
     reasons.push(
-      `Há parte anterior desta alienação nos ${SINGLE_PROPERTY_LOCK_YEARS} anos antes do contrato: ela conta como outra alienação e afasta a isenção do único imóvel.`,
+      `${NOT_MET}: há parte anterior desta alienação nos ${SINGLE_PROPERTY_LOCK_YEARS} anos antes do contrato: ela conta como outra alienação e afasta a isenção do único imóvel.`,
     );
   }
   const value = operationTotal(input);
   if (!(value <= SINGLE_PROPERTY_LIMIT)) {
-    const label = isPermuta(input) ? "O valor total da permuta do titular" : "O valor de alienação do titular";
+    const holder = input.ownership === "condominio" ? ", na parte do titular" : "";
+    const label = isPermuta(input) ? `o valor total da permuta${holder}` : `o preço da operação, bruto de corretagem${holder}`;
     reasons.push(
-      `${label} (${money(value)}) supera o limite de ${money(SINGLE_PROPERTY_LIMIT)}.${permutaTotalNote(input)}`,
+      `${NOT_MET}: ${label} (${money(value)}) supera o limite de ${money(SINGLE_PROPERTY_LIMIT)}.${permutaTotalNote(input)}`,
     );
   }
   return {applies: reasons.length === 0, reasons};

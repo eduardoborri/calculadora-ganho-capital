@@ -1,5 +1,6 @@
 import { useState } from "react";
 import type { CaseInput, CaseResult } from "../types";
+import { comunhaoNote } from "../data/textos";
 import { money } from "../utils/format";
 import { buildMemoLines, payableNote, receivedCostLine, type MemoLine } from "./memoLines";
 import OutOfScopeNotice from "./OutOfScopeNotice";
@@ -102,6 +103,9 @@ export default function CalculationMemo({ input, result }: CalculationMemoProps)
               <p className="text-sm text-white/85">Imposto a pagar</p>
               <p className="mt-1 text-[32px] max-sm:text-[28px] leading-none font-semibold tabular-nums">{money(result.taxPayable)}</p>
               {note && <p className="text-xs text-white/70 mt-2 leading-relaxed">{note}</p>}
+              {input.ownership === "comunhao" && (
+                <p className="text-xs text-white/70 mt-2 leading-relaxed">{comunhaoNote(money(result.taxPayable / 2))}</p>
+              )}
             </div>
           </div>
 
@@ -120,8 +124,8 @@ export default function CalculationMemo({ input, result }: CalculationMemoProps)
       <details className="text-xs text-white/70">
         <summary className="cursor-pointer text-white/85 font-semibold list-none">Premissas aplicadas</summary>
         <ul className="mt-2 space-y-1.5 leading-relaxed list-disc pl-4 font-normal">
-          <li>Precisão total nas contas; duas casas só nos valores exibidos e seis nos fatores.</li>
-          <li>Reduções por item de custo, conforme a data de cada item (IN SRF 599/2005, art. 3º, § 4º).</li>
+          <li>Precisão total nas contas e nos fatores; duas casas nos valores e seis nos fatores apenas na exibição.</li>
+          <li>Reduções por item de custo, conforme a data e a natureza de cada item (IN SRF 599/2005, art. 3º, §§ 4º e 5º).</li>
           <li>Isenções de tudo ou nada antes da tabela; reinvestimento depois de FR1 e FR2.</li>
           <li>Tabela progressiva de 15% a 22,5% (Lei 8.981/1995, art. 21).</li>
           <li>Resultado consultivo: não substitui o demonstrativo oficial da Receita.</li>

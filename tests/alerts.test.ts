@@ -223,7 +223,30 @@ describe('cost', () => {
     const alert = find(run({ownership: 'comunhao'}), 'comunhao-recolhimento');
     expect(alert?.level).toBe('info');
     expect(alert?.text).toContain('cônjuge');
+    expect(alert?.text).toContain('50%');
+    expect(alert?.legal).toContain('161/2026');
     expect(ids(run({}))).not.toContain('comunhao-recolhimento');
+  });
+
+  it('an inherited property says the factors run from the transfer', () => {
+    expect(find(run({acquisitionForm: 'heranca'}), 'transferencia-data')?.text).toContain('abertura da sucessão');
+    expect(ids(run({}))).not.toContain('transferencia-data');
+  });
+});
+
+describe('review notes', () => {
+  it('a residential sale with tax and no reinvestment points to art. 39', () => {
+    const alert = find(run({}), 'reinvestimento-nao-informado');
+    expect(alert?.text).toContain('180 dias');
+    expect(alert?.text).toContain('quitação');
+    expect(ids(run({residential: false}))).not.toContain('reinvestimento-nao-informado');
+    expect(ids(run({reinvestment: reinv()}))).not.toContain('reinvestimento-nao-informado');
+    expect(ids(run({saleValue: 300000}))).not.toContain('reinvestimento-nao-informado');
+  });
+
+  it('a sale in cash points to the prazo mode for later receipts', () => {
+    expect(find(run({}), 'vista-recebimento-posterior')?.legal).toContain('art. 31');
+    expect(ids(run({saleMode: 'partes'}))).not.toContain('vista-recebimento-posterior');
   });
 });
 
@@ -343,8 +366,10 @@ describe('open points', () => {
 
   it('the Darf code shows with the seal when there is tax to pay', () => {
     const alert = find(run({}), 'darf-codigo');
-    expect(alert?.level).toBe('aberto');
+    expect(alert?.level).toBe('info');
     expect(alert?.text).toContain(DARF_CODE);
+    expect(alert?.text).toContain('Agenda Tributária');
+    expect(alert?.text).not.toContain('doação');
     expect(ids(run({saleValue: 400000, singleProperty: single}))).not.toContain('darf-codigo');
   });
 

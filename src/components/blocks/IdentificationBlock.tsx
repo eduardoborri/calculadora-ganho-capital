@@ -6,7 +6,7 @@ import { BlockCard, CheckField, Field, TextField, fieldBox } from "./fields";
 const OUT_OF_SCOPE_OPTIONS: { value: OutOfScope; label: string }[] = [
   { value: "nao_residente", label: "Alienante não residente no Brasil" },
   { value: "pessoa_juridica", label: "Alienante pessoa jurídica" },
-  { value: "rural_terra_nua", label: "Imóvel rural com regra de terra nua" },
+  { value: "rural_terra_nua", label: "Imóvel rural (VTN/Diat, Lei 9.393/1996, art. 19)" },
   { value: "exterior", label: "Imóvel no exterior" },
   { value: "moeda_estrangeira", label: "Operação em moeda estrangeira" },
 ];

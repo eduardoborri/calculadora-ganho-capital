@@ -210,8 +210,21 @@ function projectiveAlerts(input: CaseInput, today: string): Alert[] {
   ];
 }
 
+// A sale in cash with part of the price received in a later month is a sale a prazo.
+function vistaAlerts(input: CaseInput): Alert[] {
+  if (input.saleMode !== "vista") return [];
+  return [
+    {
+      id: "vista-recebimento-posterior",
+      level: "info",
+      text: "Se parte do preço for recebida em mês posterior ao da alienação (ex.: sinal e saldo na escritura), use o modo a prazo: o ganho é tributado na proporção de cada recebimento (IN SRF 84/2001, art. 31).",
+      legal: "IN SRF 84/2001, art. 31",
+    },
+  ];
+}
+
 function installmentAlerts(input: CaseInput): Alert[] {
-  if (input.saleMode !== "prazo") return [];
+  if (input.saleMode !== "prazo") return vistaAlerts(input);
   const alerts: Alert[] = [
     {
       id: "prazo-juros-correcao",
@@ -300,9 +313,22 @@ function reinvestmentBarAlerts(input: CaseInput): Alert[] {
   return alerts;
 }
 
+// Residential sale with tax and no reinvestment typed: the art. 39 exemption may still apply.
+function reinvestmentMissingAlerts(input: CaseInput, partial: CaseResult): Alert[] {
+  if (!input.residential || input.reinvestment.enabled || partial.taxDue <= 0) return [];
+  return [
+    {
+      id: "reinvestimento-nao-informado",
+      level: "info",
+      text: `Reinvestimento (Lei 11.196/2005, art. 39) não informado. Fica isento o ganho aplicado, em até ${REINVESTMENT_DAYS} dias do contrato, na aquisição de imóvel residencial no país, inclusive na quitação de financiamento de imóvel residencial já possuído; a isenção vale uma vez a cada ${REINVESTMENT_LOCK_YEARS} anos. Com aplicação parcial, a isenção é proporcional: ganho isento = ganho × valor reinvestido ÷ valor de venda.`,
+      legal: "Lei 11.196/2005, art. 39; IN SRF 599/2005, art. 2º, com a redação da IN RFB 2.070/2022",
+    },
+  ];
+}
+
 function reinvestmentAlerts(input: CaseInput, partial: CaseResult): Alert[] {
   const {enabled, moreThanOneSale, applications} = input.reinvestment;
-  if (!enabled) return [];
+  if (!enabled) return reinvestmentMissingAlerts(input, partial);
   const alerts: Alert[] = [
     ...deadlineAlerts(partial.reinvestment.deadline),
     {
@@ -368,9 +394,24 @@ function costAlerts(input: CaseInput): Alert[] {
   return alerts;
 }
 
-function transferAlerts(input: CaseInput): Alert[] {
-  if (input.acquisitionForm === "compra" || !input.transferAtMarket) return [];
+// Inheritance, legacy, donation or partition: the reductions run from the transfer.
+function transferDateAlerts(input: CaseInput): Alert[] {
+  if (input.acquisitionForm === "compra") return [];
   return [
+    {
+      id: "transferencia-data",
+      level: "info",
+      text: "Imóvel recebido por herança, legado, doação ou partilha: quando o custo é o valor da transferência, a data de aquisição para as reduções (art. 18, FR1 e FR2) é a da transferência (abertura da sucessão, doação ou partilha). Confirme a data de aquisição informada.",
+      legal: "IN SRF 84/2001, arts. 16, I, e 20; IN SRF 599/2005, art. 3º",
+    },
+  ];
+}
+
+function transferAlerts(input: CaseInput): Alert[] {
+  if (input.acquisitionForm === "compra") return [];
+  if (!input.transferAtMarket) return transferDateAlerts(input);
+  return [
+    ...transferDateAlerts(input),
     {
       id: "transferencia-mercado",
       level: "aviso",
@@ -386,8 +427,8 @@ function ownershipAlerts(input: CaseInput): Alert[] {
     {
       id: "comunhao-recolhimento",
       level: "info",
-      text: "Bem comum do casamento: o imposto pode ser recolhido metade em nome de cada cônjuge ou pela totalidade em nome de um deles.",
-      legal: "IN SRF 84/2001, art. 30, § 2º",
+      text: "Bem comum do casamento: o ganho é apurado sobre o imóvel inteiro, sem divisão prévia entre os cônjuges, e a tabela progressiva incide sobre o ganho total. Cada cônjuge recolhe Darf de 50% do imposto (ver cronograma).",
+      legal: "Solução de Consulta Cosit nº 161/2026; IN SRF 84/2001, art. 22, c/c art. 30, § 2º",
     },
   ];
 }
@@ -420,7 +461,7 @@ function permutaAlerts(input: CaseInput, partial: CaseResult): Alert[] {
   alerts.push({
     id: "permuta-custo-recebido",
     level: "info",
-    text: `Custo do imóvel recebido para a declaração, na parte do titular: ${money(partial.permuta.receivedCost)} (custo do imóvel dado menos a torna, mais o ganho da torna pela fórmula do Perguntão, antes da corretagem e das reduções).`,
+    text: `Custo do imóvel recebido para a declaração${input.ownership === "condominio" ? ", na parte do titular" : ""}: ${money(partial.permuta.receivedCost)} (custo do imóvel dado menos a torna, mais o ganho da torna pela fórmula do Perguntão, antes da corretagem e das reduções).`,
     legal: "RIR/2018, art. 128, § 4º, II; Perguntão IRPF 2026, pergunta 632",
   });
   if (!withoutTorna && brokerage > 0) {
@@ -458,7 +499,7 @@ function m2Alerts(input: CaseInput, partial: CaseResult): Alert[] {
       id: "m2-apos-2005",
       level: "aberto",
       text: "m2 de aquisição depois de dez/2005: a contagem inclui o mês de aquisição por inferência, sem exemplo oficial. Pode ser conferida com caso fictício no GCAP.",
-      legal: "Lei 11.196/2005, art. 40; IN SRF 599/2005, art. 3º; Perguntão IRPF 2026, pergunta 649",
+      legal: "Lei 11.196/2005, art. 40; IN SRF 599/2005, art. 3º; exemplo oficial do Perguntão (numeração da edição citada; confira na edição vigente)",
     },
   ];
 }
@@ -468,9 +509,9 @@ function darfAlerts(partial: CaseResult): Alert[] {
   return [
     {
       id: "darf-codigo",
-      level: "aberto",
-      text: `Código de receita ${DARF_CODE}: citado pelo Perguntão para doação, sem o ato que o institui. Confirme o código antes de emitir o Darf.`,
-      legal: "Perguntão IRPF 2026",
+      level: "info",
+      text: `Código de receita ${DARF_CODE}: código geral do ganho de capital de pessoa física residente na alienação de bens e direitos, inclusive imóveis. Confirme na Agenda Tributária da Receita Federal antes de emitir o Darf.`,
+      legal: "Agenda Tributária da Receita Federal; IN SRF 84/2001, art. 30",
     },
   ];
 }

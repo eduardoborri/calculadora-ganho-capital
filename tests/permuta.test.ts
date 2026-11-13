@@ -127,7 +127,7 @@ describe('permuta com torna a prazo', () => {
   it('parcelas acima da torna são inválidas', () => {
     const r = calculateCase(caso({...oficial, saleMode: 'prazo', installments: [parcela('a', '2025-05-20', 12000)]}));
     expect(r.status).toBe('invalido');
-    expect(r.missing.join(' ')).toContain('torna do titular');
+    expect(r.missing.join(' ')).toContain('superam a torna (');
   });
 });
 

@@ -1,7 +1,7 @@
 import { jsPDF } from "jspdf";
-import { buildMemoLines, payableNote, receivedCostLine, type MemoLine } from "../components/memoLines";
+import { buildMemoLines, payableNote, receivedCostLine, reductionsLabel, type MemoLine } from "../components/memoLines";
 import { ACQUISITION_FORM_LABEL, OPERATION_LABEL, OWNERSHIP_LABEL, SALE_MODE_LABEL } from "../data/labels";
-import { ASPECTOS_GERAIS, NOTA_PERMUTA, NOTAS_METODOLOGICAS, scheduleNotePrazo } from "../data/textos";
+import { ASPECTOS_GERAIS, comunhaoNote, NOTA_PERMUTA, NOTAS_METODOLOGICAS, SCHEDULE_NOTE_COMUNHAO, scheduleNotePrazo } from "../data/textos";
 import type { Alert, CaseInput, CaseResult, ExemptionCheck } from "../types";
 import { correctedCost, usesCostIndex } from "./capitalGain";
 import { filledItems, natureText } from "./costItems";
@@ -300,7 +300,11 @@ class Report {
       this.y += height;
     };
 
-    this.ensure(31.5 + minRow + 1);
+    // Never leave a header alone at the foot of a page: it needs room for itself and the first row.
+    const headerHeight = layout(columns.map((c) => c.label), "header", options.compact ? 28 : 31.5).height;
+    const first = rows[0];
+    const firstHeight = first ? layout(first.cells, first.kind ?? "normal", minRow).height : minRow;
+    this.ensure(headerHeight + firstHeight + 1);
     header();
 
     for (const row of rows) {
@@ -410,6 +414,27 @@ const dateOrDash = (iso: string) => (isValidDate(iso) ? formatDate(iso) : "—")
 const formatMonth = (month: string) => month.split("-").reverse().join("/");
 const withoutFinalPeriod = (text: string) => text.trim().replace(/\.$/, "");
 
+// ------------------------------------------------------------------ pending fields
+export const PENDING = "(pendente)";
+const MIN_PROPERTY_DESCRIPTION = 5;
+
+export function propertyText(input: CaseInput): string {
+  const text = input.propertyDescription.trim();
+  return text.length < MIN_PROPERTY_DESCRIPTION ? PENDING : text;
+}
+
+// Fields the report prints as "(pendente)": listed in a box at the top of the first page.
+export function pendingFields(input: CaseInput): string[] {
+  const pending: string[] = [];
+  if (propertyText(input) === PENDING) pending.push("Descrição do imóvel (mínimo de 5 caracteres)");
+  if (!input.update) {
+    filledItems(input).forEach((item, index) => {
+      if (!item.description.trim()) pending.push(`Descrição do item de custo ${index + 1}`);
+    });
+  }
+  return pending;
+}
+
 // ------------------------------------------------------------------ cost rows
 interface CostRow {
   id: string;
@@ -436,7 +461,7 @@ function costRows(input: CaseInput): CostRow[] {
   }
   return filledItems(input).map((item) => {
     const indexed = usesCostIndex({ ...item, manual: false });
-    const description = item.description.trim() || "Item sem descrição";
+    const description = item.description.trim() || PENDING;
     return {
       id: item.id,
       description: indexed && item.manual ? `${description} (valor informado manualmente)` : description,
@@ -486,6 +511,10 @@ export function buildPdfReport(params: PdfReportParams, files: ReportFiles): Gen
     { eyebrow, title: "Ganho de capital: aspectos gerais", subtitle: "Regras gerais da apuração na alienação de imóveis por pessoa física residente" },
     true
   );
+  const pending = pendingFields(input);
+  if (pending.length > 0) {
+    r.callout(`${pending.join("; ")}. Esses campos aparecem como "${PENDING}" no relatório.`, "alert", "Campos pendentes");
+  }
   ASPECTOS_GERAIS.forEach((p) => r.paragraph(p));
 
   // 2. Methodological notes, before the calculations
@@ -507,7 +536,7 @@ function notesPages(r: Report, input: CaseInput, result: CaseResult, eyebrow: st
   const projective = isValidDate(input.contractDate) && input.contractDate > today;
   if (projective) {
     r.callout(
-      `A data do contrato (${formatDate(input.contractDate)}) é posterior à data de emissão deste relatório (${formatDate(today)}). Por isso, a apuração tem caráter projetivo: aplica aos dados informados a tabela e as regras vigentes na data de emissão, e o resultado pode variar se a legislação ou os dados se alterarem até a operação.`,
+      `A data da alienação (${formatDate(input.contractDate)}) é posterior à data de emissão deste relatório (${formatDate(today)}). Por isso, a apuração tem caráter projetivo: aplica aos dados informados a tabela e as regras vigentes na data de emissão, e o resultado pode variar se a legislação ou os dados se alterarem até a operação.`,
       "neutral",
       "Caráter projetivo da apuração"
     );
@@ -524,6 +553,12 @@ function notesPages(r: Report, input: CaseInput, result: CaseResult, eyebrow: st
     r.paragraph(projective ? "Não há outros alertas para os dados informados." : "Não há alertas para os dados informados.");
     return;
   }
+  // The definition goes before the alerts, so it never ends alone on a page.
+  if (alerts.some((a) => a.level === "aberto")) {
+    r.paragraph(
+      "Ponto em aberto: tema em que a apuração adota uma interpretação sem exemplo oficial ou sem ato normativo localizado. O resultado correspondente deve ser lido com essa limitação."
+    );
+  }
   alerts.forEach((alert) => {
     r.callout(
       `${withoutFinalPeriod(alert.text)}. Referência: ${withoutFinalPeriod(alert.legal)}.`,
@@ -531,11 +566,6 @@ function notesPages(r: Report, input: CaseInput, result: CaseResult, eyebrow: st
       LEVEL_LABEL[alert.level]
     );
   });
-  if (alerts.some((a) => a.level === "aberto")) {
-    r.footnote(
-      "Ponto em aberto: tema em que a apuração adota uma interpretação sem exemplo oficial ou sem ato normativo localizado. O resultado correspondente deve ser lido com essa limitação."
-    );
-  }
 }
 
 const twoCols = (label: string) => [
@@ -568,9 +598,12 @@ function calculationPages(r: Report, input: CaseInput, result: CaseResult, eyebr
 
   // 3.1 Identification and the memo
   r.page({ eyebrow, title: "Apuração do ganho de capital", subtitle: `Memória de cálculo – emitido em ${issued}` });
+  const comunhao = input.ownership === "comunhao";
   if (result.taxPayable > 0) {
     r.callout(
-      `Com base nos dados informados, a apuração indica imposto a pagar de ${money(result.taxPayable)}, conforme a memória de cálculo abaixo.`,
+      `Com base nos dados informados, a apuração indica imposto a pagar de ${money(result.taxPayable)}${
+        comunhao ? ", referente ao imóvel como um todo" : ""
+      }, conforme a memória de cálculo abaixo.${comunhao ? ` ${comunhaoNote(money(result.taxPayable / 2))}` : ""}`,
       "alert"
     );
   } else {
@@ -580,7 +613,7 @@ function calculationPages(r: Report, input: CaseInput, result: CaseResult, eyebr
   const ident: Row[] = [
     { cells: ["Contribuinte", input.taxpayerName.trim() || "Não informado"] },
     { cells: ["Ano-calendário", String(reportYear(input.calendarYear, input.contractDate))] },
-    { cells: ["Imóvel", input.propertyDescription.trim() || "Não informado"] },
+    { cells: ["Imóvel", propertyText(input)] },
     { cells: ["Imóvel residencial", yesNo(input.residential)] },
     { cells: ["Forma de aquisição", ACQUISITION_FORM_LABEL[input.acquisitionForm]] },
     { cells: ["Data de aquisição", dateOrDash(input.acquisitionDate)] },
@@ -592,7 +625,7 @@ function calculationPages(r: Report, input: CaseInput, result: CaseResult, eyebr
           : OWNERSHIP_LABEL[input.ownership],
       ],
     },
-    { cells: ["Data do contrato de alienação", dateOrDash(input.contractDate)] },
+    { cells: ["Data da alienação", dateOrDash(input.contractDate)] },
   ];
   // A sale keeps its identification as before; a permuta names the operation and its values.
   if (permuta) {
@@ -640,7 +673,7 @@ function calculationPages(r: Report, input: CaseInput, result: CaseResult, eyebr
   );
   const sale = byKey.get("venda");
   if (sale) {
-    r.subheading(permuta ? "Torna recebida" : "Valor de alienação");
+    r.subheading(permuta ? "Torna recebida" : sale.label);
     detailTable(r, sale);
   }
   r.subheading(permuta ? "Custo do imóvel dado e custo atribuído à torna" : "Custo de aquisição");
@@ -717,7 +750,7 @@ function calculationPages(r: Report, input: CaseInput, result: CaseResult, eyebr
     );
     const reductions = byKey.get("reducoes");
     r.footnote(
-      `Ganho reduzido = ganho rateado × (1 − art. 18) × FR1 × FR2, com FR1 = 1 ÷ 1,0060^m1 e FR2 = 1 ÷ 1,0035^m2, fatores com seis casas. Total das reduções: ${
+      `Ganho reduzido = ganho rateado × (1 − art. 18) × FR1 × FR2, com FR1 = 1 ÷ 1,0060^m1 e FR2 = 1 ÷ 1,0035^m2, fatores calculados em precisão plena e exibidos com seis casas. Total das ${reductionsLabel(result.items).toLowerCase()}: ${
         reductions?.value ?? money(result.grossGain - result.gainAfterReductions)
       }. ${reductions?.note ?? ""}`.trim()
     );
@@ -776,12 +809,7 @@ function calculationPages(r: Report, input: CaseInput, result: CaseResult, eyebr
     detailTable(r, prior);
   }
 
-  r.table(twoCols("Resultado"), [
-    { cells: ["Base tributável", money(result.taxableBase)] },
-    { cells: ["Imposto pela tabela", money(result.taxDue)] },
-    ...(result.priorTaxPaid > 0 ? [{ cells: ["(−) Imposto já pago", money(result.priorTaxPaid)] }] : []),
-    { cells: ["Imposto a pagar", money(result.taxPayable)], kind: "total" },
-  ] as Row[]);
+  // No "Resultado" box here: it repeated the memo summary of the first calculation page.
   if (payable) r.footnote(payable);
   if (received) {
     r.table(twoCols("Permuta com torna"), [{ cells: [received.label, received.value], kind: "total" }]);
@@ -791,22 +819,27 @@ function calculationPages(r: Report, input: CaseInput, result: CaseResult, eyebr
   if (result.schedule.length > 0) {
     r.page({ eyebrow, title: "Cronograma de pagamento", subtitle: "Imposto por mês e vencimento do Darf" });
     const total = (pick: (l: CaseResult["schedule"][number]) => number) => result.schedule.reduce((sum, l) => sum + pick(l), 0);
+    // Marital community: an extra column with each spouse's Darf, half the tax.
+    const spouse = (tax: number) => (comunhao ? [money(tax / 2)] : []);
     const scheduleRows: Row[] = result.schedule.map((l) => ({
-      cells: [formatMonth(l.month), money(l.received), money(l.gain), money(l.tax), formatDate(l.dueDate)],
+      cells: [formatMonth(l.month), money(l.received), money(l.gain), money(l.tax), ...spouse(l.tax), formatDate(l.dueDate)],
     }));
     if (result.schedule.length > 1) {
+      const tax = total((l) => l.tax);
       scheduleRows.push({
-        cells: ["Total", money(total((l) => l.received)), money(total((l) => l.gain)), money(total((l) => l.tax)), ""],
+        cells: ["Total", money(total((l) => l.received)), money(total((l) => l.gain)), money(tax), ...spouse(tax), ""],
         kind: "total",
       });
     }
+    const w = comunhao ? 125 : 150;
     r.table(
       [
-        { label: "Mês", width: WIDTH - 600 },
-        { label: "Valor recebido", width: 150 },
-        { label: "Ganho do mês", width: 150 },
-        { label: "Imposto", width: 150 },
-        { label: "Vencimento", width: 150, align: "center" },
+        { label: "Mês", width: WIDTH - 4 * w - (comunhao ? w : 0) },
+        { label: "Valor recebido", width: w },
+        { label: "Ganho do mês", width: w },
+        { label: "Imposto", width: w },
+        ...(comunhao ? [{ label: "Por cônjuge (50%)", width: w }] : []),
+        { label: "Vencimento", width: w, align: "center" as const },
       ],
       scheduleRows
     );
@@ -814,8 +847,8 @@ function calculationPages(r: Report, input: CaseInput, result: CaseResult, eyebr
       `${
         input.saleMode === "prazo"
           ? scheduleNotePrazo(permuta)
-          : "Imposto do mês do contrato."
-      } Vencimento no último dia útil do mês seguinte, considerados os feriados nacionais e o dia 31/12, sem expediente bancário.`
+          : "Imposto do mês da alienação."
+      } Vencimento no último dia útil do mês seguinte, considerados os feriados nacionais e o dia 31/12, sem expediente bancário.${comunhao ? ` ${SCHEDULE_NOTE_COMUNHAO}` : ""}`
     );
   }
 }
