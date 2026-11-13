@@ -107,10 +107,11 @@ export function isNationalHoliday(date: string): boolean {
 function isBusinessDay(date: string): boolean {
   const { y, m, d } = parse(date);
   const dow = new Date(utc(y, m, d)).getUTCDay();
-  return dow !== 0 && dow !== 6 && !isNationalHoliday(date);
+  // 31/12 has no bank hours for the public (Resolucao CMN 4.880/2020), so it is not a business day.
+  return dow !== 0 && dow !== 6 && !isNationalHoliday(date) && date.slice(5) !== "12-31";
 }
 
-// Last business day (not weekend, not national holiday) of the month after `date`.
+// Last business day (not weekend, not national holiday, not 31/12) of the month after `date`.
 export function lastBusinessDayOfNextMonth(date: string): string {
   const { y, m } = parse(date);
   // Day 0 of the month after next is the last day of next month.

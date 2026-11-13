@@ -154,7 +154,7 @@ describe('histórico', () => {
       quotaPct: 50,
       saleMode: 'prazo',
       costItems: [
-        {id: 'c1', description: 'Compra', date: '2010-05-10', value: 300000, hasDocument: true, isLand: true},
+        {id: 'c1', description: 'Compra', date: '2010-05-10', value: 300000, hasDocument: true, isLand: true, nature: 'preco'},
         {
           id: 'c2',
           description: 'Antigo',

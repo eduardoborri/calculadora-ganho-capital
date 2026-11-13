@@ -49,6 +49,9 @@ describe('lastBusinessDayOfNextMonth', () => {
   it('rolls over the year', () => {
     expect(lastBusinessDayOfNextMonth('2026-12-10')).toBe('2027-01-29');
   });
+  it('skips 31/12, which has no bank hours', () => {
+    expect(lastBusinessDayOfNextMonth('2026-11-15')).toBe('2026-12-30');
+  });
 });
 
 describe('isNationalHoliday', () => {

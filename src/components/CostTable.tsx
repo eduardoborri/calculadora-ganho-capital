@@ -5,7 +5,8 @@
 
 import { Fragment } from "react";
 import { Plus, Trash2 } from "lucide-react";
-import type { CostItem } from "../types";
+import { COST_NATURE_LABEL, labelOptions } from "../data/labels";
+import type { CostItem, CostNature } from "../types";
 import { correctedCost } from "../utils/capitalGain";
 import { filledItems } from "../utils/costItems";
 import { formatCurrency, formatPercent, round2 } from "../utils/format";
@@ -26,7 +27,7 @@ interface CostRowProps {
 }
 
 function CostRow({ item, landRule, onReplace, onRemove }: CostRowProps) {
-  const columns = landRule ? 5 : 4;
+  const columns = landRule ? 6 : 5;
   return (
     <Fragment>
       <tr className={`hover:bg-paper/40 align-top ${stackRow} ${isUpTo1995(item) ? "max-sm:border-b-0" : ""}`}>
@@ -47,6 +48,21 @@ function CostRow({ item, landRule, onReplace, onRemove }: CostRowProps) {
             onChange={(e) => onReplace({ ...item, date: e.target.value })}
             className={cellInput}
           />
+        </td>
+        <td data-label="Natureza" className={`table-cell ${stackCell}`}>
+          <select
+            value={item.nature ?? ""}
+            aria-label="Natureza do item de custo"
+            onChange={(e) => onReplace({ ...item, nature: (e.target.value || undefined) as CostNature | undefined })}
+            className="text-xs px-2 py-1 field-box rounded text-primary w-full"
+          >
+            {!item.nature && <option value="">Pela data do item</option>}
+            {labelOptions(COST_NATURE_LABEL).map((o) => (
+              <option key={o.value} value={o.value}>
+                {o.label}
+              </option>
+            ))}
+          </select>
         </td>
         <td data-label="Valor (R$)" className={`table-cell bg-field ${stackCellYellow}`}>
           <ValueCell item={item} onReplace={onReplace} />
@@ -90,8 +106,11 @@ function CostRow({ item, landRule, onReplace, onRemove }: CostRowProps) {
 export default function CostTable({ input, onChange }: BlockProps) {
   const replace = (next: CostItem) => onChange({ costItems: input.costItems.map((item) => (item.id === next.id ? next : item)) });
   const remove = (id: string) => onChange({ costItems: input.costItems.filter((item) => item.id !== id) });
-  const add = () =>
-    onChange({ costItems: [...input.costItems, { id: newId(), description: "", date: "", value: 0, hasDocument: false }] });
+  // The first item is usually the purchase price; later ones, improvements.
+  const add = () => {
+    const nature: CostNature = input.costItems.length === 0 ? "preco" : "benfeitoria";
+    onChange({ costItems: [...input.costItems, { id: newId(), description: "", date: "", value: 0, hasDocument: false, nature }] });
+  };
 
   const total = filledItems(input).reduce((sum, item) => sum + correctedCost(item), 0);
   const condo = input.ownership === "condominio";
@@ -105,7 +124,9 @@ export default function CostTable({ input, onChange }: BlockProps) {
       )}
       <p className="text-sm text-text-gray leading-relaxed">
         Valores do imóvel inteiro{condo ? "; a calculadora aplica a quota do titular" : ""}. Cada item tem a data do pagamento (na obra, a
-        data de início) e recebe as reduções pela sua data. Custo pago a partir de 1996 não é corrigido (IN SRF 84/2001, art. 8º).
+        data de início) e recebe as reduções conforme a natureza: parcela do preço (inclusive financiamento) usa a data de aquisição (contrato de
+        compra); benfeitoria (construção, ampliação, reforma) e parte adquirida depois usam a data do item (IN SRF 599/2005, art. 3º,
+        §§ 4º e 5º). Custo pago a partir de 1996 não é corrigido (IN SRF 84/2001, art. 8º).
       </p>
 
       <CheckField
@@ -116,13 +137,17 @@ export default function CostTable({ input, onChange }: BlockProps) {
       />
 
       <div className="border border-rule rounded overflow-x-auto">
-        <table className={`w-full border-collapse min-w-[680px] ${stackTable}`}>
+        <table className={`w-full border-collapse min-w-[820px] ${stackTable}`}>
           <thead className={stackHead}>
             <tr>
               <th className="table-header">Item</th>
               <th className="table-header w-40">
                 Data
                 <Tooltip text="Data do pagamento do item. Para obra, a data de início." />
+              </th>
+              <th className="table-header w-40">
+                Natureza
+                <Tooltip text="Parcela do preço: reduções pela data de aquisição. Benfeitoria e parte adquirida depois: pela data do item." />
               </th>
               <th className="table-header text-right w-48">Valor (R$)</th>
               {input.landRule && <th className="table-header text-center w-20">Terreno</th>}
@@ -138,7 +163,7 @@ export default function CostTable({ input, onChange }: BlockProps) {
           <tbody className={stackBody}>
             {input.costItems.length === 0 && (
               <tr className="max-sm:block">
-                <td className="table-cell text-center text-text-gray py-5 max-sm:block" colSpan={input.landRule ? 6 : 5}>
+                <td className="table-cell text-center text-text-gray py-5 max-sm:block" colSpan={input.landRule ? 7 : 6}>
                   Nenhum item de custo. Sem custo, todo o ganho usa a data de aquisição do imóvel.
                 </td>
               </tr>
@@ -155,13 +180,13 @@ export default function CostTable({ input, onChange }: BlockProps) {
           </tbody>
           <tfoot className={stackFoot}>
             <tr className={`table-total ${stackTotalRow}`}>
-              <td colSpan={2} className="max-sm:p-0 max-sm:border-0">Total do imóvel inteiro</td>
+              <td colSpan={3} className="max-sm:p-0 max-sm:border-0">Total do imóvel inteiro</td>
               <td className="text-right tabular-nums max-sm:p-0 max-sm:border-0">{formatCurrency(round2(total))}</td>
               <td colSpan={input.landRule ? 3 : 2} className="max-sm:hidden"></td>
             </tr>
             {condo && (
               <tr className={`table-total ${stackTotalRow}`}>
-                <td colSpan={2} className="max-sm:p-0 max-sm:border-0">Parte do titular ({formatPercent(input.quotaPct / 100)})</td>
+                <td colSpan={3} className="max-sm:p-0 max-sm:border-0">Parte do titular ({formatPercent(input.quotaPct / 100)})</td>
                 <td className="text-right tabular-nums max-sm:p-0 max-sm:border-0">{formatCurrency(round2(holderPart(input, total)))}</td>
                 <td colSpan={input.landRule ? 3 : 2} className="max-sm:hidden"></td>
               </tr>

@@ -24,7 +24,7 @@ export default function ScheduleTable({ schedule, saleMode, permuta = false }: S
         {saleMode === "prazo"
           ? scheduleNotePrazo(permuta)
           : "Imposto do mês do contrato."}{" "}
-        Vencimento no último dia útil do mês seguinte, considerados os feriados nacionais.
+        Vencimento no último dia útil do mês seguinte, considerados os feriados nacionais e o dia 31/12, sem expediente bancário.
       </p>
       <div className="card">
         <div className="overflow-x-auto">

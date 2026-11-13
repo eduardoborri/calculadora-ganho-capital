@@ -106,6 +106,7 @@ function normalizeCostItem(r: Record<string, unknown>): CostItem {
   };
   if (typeof r.isLand === "boolean") item.isLand = r.isLand;
   if (typeof r.manual === "boolean") item.manual = r.manual;
+  if (r.nature === "preco" || r.nature === "benfeitoria" || r.nature === "parte") item.nature = r.nature;
   const o = r.original;
   if (isObject(o) && typeof o.amount === "number" && Number.isFinite(o.amount) && MOEDAS.includes(o.moeda as Moeda)) {
     item.original = {amount: o.amount, moeda: o.moeda as Moeda};

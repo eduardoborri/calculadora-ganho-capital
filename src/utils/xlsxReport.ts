@@ -13,7 +13,7 @@ import { costIndex } from "../data/custoAte1995";
 import { ACQUISITION_FORM_LABEL, OPERATION_LABEL, OWNERSHIP_LABEL, SALE_MODE_LABEL } from "../data/labels";
 import type { CaseInput, CaseResult, CostItem, ItemReduction } from "../types";
 import { art18Percent, countM1, countM2, usesCostIndex } from "./capitalGain";
-import { filledItems } from "./costItems";
+import { filledItems, natureText, reductionDate } from "./costItems";
 import { completedMonths, isValidDate, lastBusinessDayOfNextMonth, reportYear, todayInBrazil } from "./dates";
 import { isApplicationCounted } from "./exemptions";
 import { formatDate } from "./format";
@@ -156,6 +156,7 @@ interface CostRow {
   id: string;
   label: string;
   date: string;
+  factorDate: string; // date the reductions use: the item date, or the acquisition for a part of the price
   kind: CostKind;
   item?: CostItem;
 }
@@ -174,26 +175,27 @@ function costRows(input: CaseInput): CostRow[] {
   if (update?.law === "14973") {
     // Both lines always: at 0% the DTA line costs 0 and carries no gain, as in the engine.
     return [
-      { id: "atualizacao-caa", label: "CAA (custo de aquisição declarado)", date: update.originalAcquisitionDate, kind: "caa" },
-      { id: "atualizacao-dta", label: "DTA × percentual", date: update.date, kind: "dta" },
+      { id: "atualizacao-caa", label: "CAA (custo de aquisição declarado)", date: update.originalAcquisitionDate, factorDate: update.originalAcquisitionDate, kind: "caa" },
+      { id: "atualizacao-dta", label: "DTA × percentual", date: update.date, factorDate: update.date, kind: "dta" },
     ];
   }
   if (update?.law === "rearp") {
     return applyValueUpdate(input).costItems.map((line) =>
       line.id === "atualizacao-rearp"
-        ? { id: line.id, label: "CAA + DTA (Rearp)", date: line.date, kind: "rearp" as const }
-        : { id: line.id, label: "CAA (custo original, Rearp desfeito)", date: line.date, kind: "caa" as const },
+        ? { id: line.id, label: "CAA + DTA (Rearp)", date: line.date, factorDate: line.date, kind: "rearp" as const }
+        : { id: line.id, label: "CAA (custo original, Rearp desfeito)", date: line.date, factorDate: line.date, kind: "caa" as const },
     );
   }
   const rows: CostRow[] = filledItems(input).map((item) => ({
     id: item.id,
     label: item.description.trim() || "Item sem descrição",
     date: item.date,
+    factorDate: reductionDate(input, item),
     kind: itemKind(item),
     item,
   }));
   if (rows.length > 0) return rows;
-  return [{ id: "imovel", label: "Imóvel (custo zero)", date: input.acquisitionDate, kind: "zero" }];
+  return [{ id: "imovel", label: "Imóvel (custo zero)", date: input.acquisitionDate, factorDate: input.acquisitionDate, kind: "zero" }];
 }
 
 // The engine's reduction inputs for a line. Without a gain the engine lists no items; any
@@ -202,9 +204,9 @@ function reductionInputs(row: CostRow, result: CaseResult, contractDate: string)
   const found = result.items.find((item) => item.itemId === row.id);
   if (found) return found;
   return {
-    art18Pct: art18Percent(Number(row.date.slice(0, 4))),
-    m1: countM1(row.date),
-    m2: countM2(row.date, contractDate),
+    art18Pct: art18Percent(Number(row.factorDate.slice(0, 4))),
+    m1: countM1(row.factorDate),
+    m2: countM2(row.factorDate, contractDate),
   };
 }
 
@@ -472,7 +474,7 @@ function buildSheet(ws: Sheet, input: CaseInput, result: CaseResult): Conference
   // ---------------------------------------------------------------- 3. custo
   section("3. CUSTO DE AQUISIÇÃO");
   header([
-    [1, "Ref."], [2, "Item"], [3, "Data"], [4, "Valor original"], [5, "Índice do Anexo Único"],
+    [1, "Ref."], [2, "Item"], [3, "Data (reduções)"], [4, "Valor original"], [5, "Índice do Anexo Único"],
     [6, "Custo (imóvel inteiro)"], [7, "Custo do titular"],
     ...(permuta ? ([[8, "Custo atribuído à torna (× VK)"], [9, "Observação"]] as [number, string][]) : ([[8, "Observação"]] as [number, string][])),
   ], permuta ? { 9: LAST_COL } : { 8: LAST_COL });
@@ -484,8 +486,10 @@ function buildSheet(ws: Sheet, input: CaseInput, result: CaseResult): Conference
     costRowAt.push(r);
     put(r, 1, `K${index + 1}`, { bold: true, color: DARK, align: "center" });
     put(r, 2, cr.label, { wrap: true });
-    put(r, 3, formatDate(cr.date), { align: "center" });
+    // The date column follows the reductions: a part of the price shows the acquisition date.
+    put(r, 3, formatDate(cr.factorDate), { align: "center" });
     const notes: string[] = [];
+    if (cr.factorDate !== cr.date) notes.push(`Data do pagamento: ${formatDate(cr.date)}.`);
     const item = cr.item;
     if (cr.kind === "indexed") {
       const [y, m] = item.date.split("-").map(Number);
@@ -522,6 +526,8 @@ function buildSheet(ws: Sheet, input: CaseInput, result: CaseResult): Conference
     if (permuta) formulaCell(r, 8, `${addr(r, 7)}*${V("VK")}`, MONEY);
     if (item && !item.hasDocument) notes.push("Sem documento comprobatório informado: limitação da análise (IN SRF 84/2001, art. 17, I).");
     if (item?.isLand) notes.push("Terreno.");
+    const nature = item ? natureText(input, item) : null;
+    if (nature) notes.push(`${nature} (IN SRF 599/2005, art. 3º).`);
     note(r, notes.join(" "), costNoteCol);
     finish(notes.join(" ").length > 80 ? 30 : undefined);
   });
@@ -581,7 +587,8 @@ function buildSheet(ws: Sheet, input: CaseInput, result: CaseResult): Conference
     formulaCell(r, 11, `1/(1+${V("P2")})^${addr(r, 10)}`, FACTOR);
     formulaCell(r, 12, `${addr(r, 9)}*${addr(r, 11)}`, MONEY);
     const text =
-      `Data do item: ${formatDate(cr.date)}. Art. 18: Lei 7.713/1988 (Q1). m1 e m2 contam o mês inicial e o final ` +
+      `Data usada nas reduções: ${formatDate(cr.factorDate)}` +
+      `${cr.factorDate !== cr.date ? ` (parcela do preço: data de aquisição; item em ${formatDate(cr.date)})` : ""}. Art. 18: Lei 7.713/1988 (Q1). m1 e m2 contam o mês inicial e o final ` +
       `(Perguntão IRPF 2026, pergunta 649).${input.landRule && !update ? " Com a regra do terreno (Q6)." : ""}`;
     note(r, text, 13);
     finish(34);
@@ -791,7 +798,7 @@ function buildSheet(ws: Sheet, input: CaseInput, result: CaseResult): Conference
     merge(row, 1, LAST_COL);
     put(row, 1,
       "Ganho do mês = S1 × (recebido − corretagem). Imposto = ganho × S2, menos a dedução rateada pelo valor recebido, sem ficar negativo. " +
-        "Vencimento: último dia útil do mês seguinte ao do recebimento, considerados os feriados nacionais. Juros e correção das parcelas " +
+        "Vencimento: último dia útil do mês seguinte ao do recebimento, considerados os feriados nacionais e o dia 31/12, sem expediente bancário. Juros e correção das parcelas " +
         "ficam fora do ganho, com carnê-leão ou retenção na fonte (IN SRF 84/2001, art. 19, § 3º).",
       { size: 9, italic: true, color: MUTED, wrap: true });
     ws.getRow(row).height = 30;

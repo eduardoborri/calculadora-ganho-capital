@@ -221,6 +221,26 @@ describe('split of the gain by cost item', () => {
   });
 });
 
+describe('nature of the cost item', () => {
+  const base = {acquisitionDate: '2000-02-10', contractDate: '2026-05-15', saleValue: 1500000};
+
+  it('a part of the price dated later takes the factors of the acquisition date', () => {
+    const r = calculateCase(caso({...base, costItems: [item('saldo', '2010-06-10', 500000, {nature: 'preco'})]}));
+    expect(r.status).toBe('ok');
+    expect(r.items[0].m1).toBe(70);
+    expect(r.items[0].m2).toBe(246);
+    expect(round2(r.taxableBase)).toBe(278526.58);
+  });
+
+  it('an improvement and an item without nature keep their own date', () => {
+    for (const extra of [{nature: 'benfeitoria' as const}, {}]) {
+      const r = calculateCase(caso({...base, costItems: [item('obra', '2010-06-10', 500000, extra)]}));
+      expect(r.items[0].m1).toBe(0);
+      expect(r.items[0].m2).toBe(countM2('2010-06-10', '2026-05-15'));
+    }
+  });
+});
+
 describe('land rule', () => {
   const sale = '2025-10-10';
   const terreno = item('terreno', '1985-06-10', 300000, {isLand: true});

@@ -4,7 +4,7 @@ import { ACQUISITION_FORM_LABEL, OPERATION_LABEL, OWNERSHIP_LABEL, SALE_MODE_LAB
 import { ASPECTOS_GERAIS, NOTA_PERMUTA, NOTAS_METODOLOGICAS, scheduleNotePrazo } from "../data/textos";
 import type { Alert, CaseInput, CaseResult, ExemptionCheck } from "../types";
 import { correctedCost, usesCostIndex } from "./capitalGain";
-import { filledItems } from "./costItems";
+import { filledItems, natureText } from "./costItems";
 import { isValidDate, reportYear, todayInBrazil } from "./dates";
 import { formatDate, formatFactor, formatPercent, money, slug } from "./format";
 import { holderPart, isPermuta } from "./holder";
@@ -441,7 +441,12 @@ function costRows(input: CaseInput): CostRow[] {
       id: item.id,
       description: indexed && item.manual ? `${description} (valor informado manualmente)` : description,
       date: dateOrDash(item.date),
-      origin: !indexed ? "Valor informado" : item.manual ? "Valor informado manualmente" : "Corrigido pelo Anexo Único da IN SRF 84/2001",
+      origin: [
+        !indexed ? "Valor informado" : item.manual ? "Valor informado manualmente" : "Corrigido pelo Anexo Único da IN SRF 84/2001",
+        natureText(input, item),
+      ]
+        .filter(Boolean)
+        .join(". "),
       document: yesNo(item.hasDocument),
       cost: holderPart(input, correctedCost(item)),
     };
@@ -810,7 +815,7 @@ function calculationPages(r: Report, input: CaseInput, result: CaseResult, eyebr
         input.saleMode === "prazo"
           ? scheduleNotePrazo(permuta)
           : "Imposto do mês do contrato."
-      } Vencimento no último dia útil do mês seguinte, considerados os feriados nacionais.`
+      } Vencimento no último dia útil do mês seguinte, considerados os feriados nacionais e o dia 31/12, sem expediente bancário.`
     );
   }
 }

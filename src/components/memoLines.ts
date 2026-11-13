@@ -4,7 +4,7 @@
 
 import type { CaseInput, CaseResult, ExemptionCheck, ItemReduction } from "../types";
 import { correctedCost, usesCostIndex } from "../utils/capitalGain";
-import { filledItems } from "../utils/costItems";
+import { filledItems, natureText } from "../utils/costItems";
 import { formatDate, formatFactor, formatPercent, money, round2 } from "../utils/format";
 import { holderPart, isPermuta, saleShare } from "../utils/holder";
 import { applyValueUpdate } from "../utils/valueUpdate";
@@ -46,9 +46,10 @@ function costDetails(input: CaseInput): CostDetail[] {
     // Same condition as the engine's correction: an item up to 31/12/1995 with an original amount.
     const indexed = usesCostIndex({ ...item, manual: false });
     const tag = !indexed ? "" : item.manual ? ", valor manual" : ", corrigido pelo Anexo Único";
+    const nature = natureText(input, item);
     return {
       id: item.id,
-      label: `${item.description.trim() || "Item sem descrição"} (${formatDate(item.date)}${tag})`,
+      label: `${item.description.trim() || "Item sem descrição"} (${formatDate(item.date)}${tag}${nature ? `; ${nature}` : ""})`,
       cost: holderPart(input, correctedCost(item)),
     };
   });

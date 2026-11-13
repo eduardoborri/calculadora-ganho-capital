@@ -27,7 +27,7 @@ import type {
   ValueUpdate,
 } from "../types";
 import {buildAlerts} from "./alerts";
-import {filledItems} from "./costItems";
+import {filledItems, reductionDate} from "./costItems";
 import {isValidDate, monthsInclusive} from "./dates";
 import {checkSingleProperty, checkSmallValue, reinvestmentOutcome} from "./exemptions";
 import {money} from "./format";
@@ -399,7 +399,7 @@ interface CostLine {
 function costLines(input: CaseInput): CostLine[] {
   return filledItems(input).map((item) => ({
     id: item.id,
-    date: item.date,
+    date: reductionDate(input, item),
     cost: input.update ? correctedCost(item) : holderPart(input, correctedCost(item)),
     isLand: Boolean(item.isLand),
   }));

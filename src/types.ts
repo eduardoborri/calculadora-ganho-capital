@@ -4,6 +4,10 @@ export type AcquisitionForm = "compra" | "heranca" | "legado" | "doacao_adiantam
 export type Ownership = "exclusivo" | "condominio" | "comunhao";
 export type SaleMode = "vista" | "prazo" | "partes";
 export type Operation = "venda" | "permuta";
+// Nature of a cost item (IN SRF 599/2005, art. 3º): a part of the price paid for the purchase
+// (installment, financing) takes the acquisition date; an improvement (benfeitoria: construction,
+// enlargement, renovation, par. 5) and a part acquired on another date (par. 4) take their own date.
+export type CostNature = "preco" | "benfeitoria" | "parte";
 export type OutOfScope = "nao_residente" | "pessoa_juridica" | "rural_terra_nua" | "exterior" | "moeda_estrangeira";
 
 export interface CostItem {
@@ -15,6 +19,7 @@ export interface CostItem {
   isLand?: boolean;
   original?: {amount: number; moeda: Moeda}; // item up to 31/12/1995
   manual?: boolean; // value typed over the default
+  nature?: CostNature; // missing: the item date is used, as before
 }
 
 export interface Installment {

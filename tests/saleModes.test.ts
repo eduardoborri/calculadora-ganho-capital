@@ -52,7 +52,7 @@ describe('schedule of an installment sale', () => {
     expect(lines).toHaveLength(1);
     expect(lines[0].received).toBe(250000);
     expect(lines[0].gain).toBeCloseTo(100000, 6);
-    expect(lines[0].dueDate).toBe('2025-12-31');
+    expect(lines[0].dueDate).toBe('2025-12-30');
   });
 
   it('lines come sorted by month, whatever the typing order', () => {

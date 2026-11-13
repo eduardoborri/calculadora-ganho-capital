@@ -1,6 +1,6 @@
 // pt-BR labels shared by the screen, the PDF and the workbook, so the three never disagree.
 
-import type { AcquisitionForm, Operation, Ownership, SaleMode } from "../types";
+import type { AcquisitionForm, CostNature, Operation, Ownership, SaleMode } from "../types";
 
 export const OPERATION_LABEL: Record<Operation, string> = {
   venda: "Venda",
@@ -19,6 +19,12 @@ export const OWNERSHIP_LABEL: Record<Ownership, string> = {
   exclusivo: "Exclusivo",
   condominio: "Condomínio",
   comunhao: "Comunhão (casamento)",
+};
+
+export const COST_NATURE_LABEL: Record<CostNature, string> = {
+  preco: "Parcela do preço",
+  benfeitoria: "Benfeitoria",
+  parte: "Parte adquirida depois",
 };
 
 export const SALE_MODE_LABEL: Record<SaleMode, string> = {
